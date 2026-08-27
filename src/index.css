@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Brand — Akiles Travel */
+    --background: 40 30% 99%;
+    --foreground: 12 15% 19%; /* #382f2d ~ warm ink */
+
+    --card: 0 0% 100%;
+    --card-foreground: 12 15% 19%;
+
+    --primary: 45 100% 50%; /* #ffc600 */
+    --primary-foreground: 12 15% 19%;
+
+    --secondary: 40 20% 96%;
+    --secondary-foreground: 12 15% 19%;
+
+    --muted: 40 16% 95%;
+    --muted-foreground: 20 8% 45%;
+
+    --accent: 40 22% 94%;
+    --accent-foreground: 12 15% 19%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 12% 90%;
+    --input: 30 12% 88%;
+    --ring: 45 100% 50%;
+
+    --ink: 12 15% 19%;
+
+    --radius: 1rem;
+  }
+
+  .dark {
+    --background: 15 14% 10%;
+    --foreground: 40 20% 96%;
+    --card: 15 12% 13%;
+    --card-foreground: 40 20% 96%;
+    --primary: 45 100% 50%;
+    --primary-foreground: 12 15% 12%;
+    --secondary: 15 8% 18%;
+    --secondary-foreground: 40 20% 96%;
+    --muted: 15 8% 18%;
+    --muted-foreground: 30 8% 62%;
+    --accent: 15 8% 20%;
+    --accent-foreground: 40 20% 96%;
+    --border: 15 8% 22%;
+    --input: 15 8% 22%;
+    --ring: 45 100% 50%;
+    --ink: 40 20% 96%;
+  }
+
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight;
+  }
+  /* iOS: inputs at least 16px to prevent zoom */
+  input, textarea, select {
+    font-size: max(16px, 1rem);
+  }
+}
+
+@layer utilities {
+  .safe-b {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

@@ -1,0 +1,129 @@
+// ---------------------------------------------------------------------------
+// Akiles Travel — domain model
+// Mirrors the v1 schema (activities, provider_profiles, slots, tiers, bookings)
+// kept normalized and portable so it can move to Supabase/Postgres unchanged.
+// ---------------------------------------------------------------------------
+
+export type ListingType = "experience" | "event";
+
+export type PublicationStatus =
+  | "draft"
+  | "pending_review"
+  | "published"
+  | "rejected";
+
+export type VerificationStatus = "pending" | "approved" | "rejected";
+
+export type BookingMode = "instant" | "request";
+
+export type BookingStatus =
+  | "pending"
+  | "pending_approval"
+  | "confirmed"
+  | "completed"
+  | "cancelled"
+  | "rejected"
+  | "expired"
+  | "payment_failed";
+
+export interface ProviderProfile {
+  id: string;
+  user_id: string;
+  business_name: string;
+  bio?: string;
+  verification_status: VerificationStatus;
+  booking_mode: BookingMode;
+  created_at: string;
+}
+
+export interface RecurringSchedule {
+  id: string;
+  day_of_week: number; // 0-6, Sunday=0
+  start_time: string; // "09:00"
+  end_time?: string; // "12:00"
+  capacity: number;
+  is_active: boolean;
+}
+
+export interface AvailabilitySlot {
+  id: string;
+  activity_id: string;
+  slot_date: string; // ISO date "2026-09-01"
+  start_time: string;
+  end_time?: string;
+  total_capacity: number;
+  booked_capacity: number;
+  status: "abierta" | "bloqueada" | "cancelada";
+  origin: "recurrente" | "manual";
+}
+
+export interface TicketTier {
+  id: string;
+  tier_name: string;
+  price: number;
+  quantity_available: number;
+  quantity_sold: number;
+}
+
+export interface Experience {
+  id: string;
+  provider_profile_id: string;
+  listing_type: ListingType;
+  title: string;
+  description: string;
+  highlights: string[];
+  whats_included: string[];
+  whats_not_included: string[];
+  what_to_bring: string[];
+  price_per_person: number;
+  currency: "USD";
+  min_capacity: number;
+  max_capacity: number;
+  duration_hours: number;
+  languages: string[];
+  category?: string;
+  // location
+  city?: string;
+  area?: string;
+  location_address?: string;
+  location_lat?: number;
+  location_lng?: number;
+  // media
+  image_urls: string[];
+  featured_image?: string;
+  // lifecycle
+  publication_status: PublicationStatus;
+  is_active: boolean;
+  registration_deadline_hours: number;
+  event_date?: string; // only for listing_type === "event"
+  schedules: RecurringSchedule[];
+  tiers: TicketTier[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Booking {
+  id: string;
+  activity_id: string;
+  experience_title: string;
+  contact_name: string;
+  contact_email: string;
+  number_of_people: number;
+  scheduled_date: string;
+  scheduled_time: string;
+  booking_status: BookingStatus;
+  confirmation_code: string;
+  subtotal_paid: number;
+  service_fee_paid: number;
+  total_paid: number;
+  created_at: string;
+}
+
+// A partial draft produced by the AI extraction before the provider confirms it.
+export type ExperienceDraft = Omit<
+  Experience,
+  "id" | "provider_profile_id" | "publication_status" | "is_active" | "created_at" | "updated_at"
+> & {
+  // per-field provenance: was this value extracted from the prompt, or a default we filled in?
+  _sources: Partial<Record<keyof Experience, "extracted" | "default">>;
+};
