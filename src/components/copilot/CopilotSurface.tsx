@@ -24,6 +24,16 @@ import { experienceToDraft } from "@/lib/experience";
 import { uid } from "@/lib/utils";
 import { ArrowUp, Sparkles } from "lucide-react";
 
+// Monotonic client timestamps so a user message and its reply keep their order
+// even when saved within the same millisecond.
+let _lastMs = 0;
+function monoIso(): string {
+  let ms = Date.now();
+  if (ms <= _lastMs) ms = _lastMs + 1;
+  _lastMs = ms;
+  return new Date(ms).toISOString();
+}
+
 // ---- Structured block registry (the model selects a type; UI renders it) ----
 type Block =
   | { type: "text"; text: string }
@@ -96,7 +106,13 @@ export function CopilotSurface({
     setMessages((m) => [...m, msg]);
     if (isSupabaseConfigured && user) {
       void repo
-        .saveMessage({ id: msg.id, user_id: user.id, role, blocks: blocks as unknown[] })
+        .saveMessage({
+          id: msg.id,
+          user_id: user.id,
+          role,
+          blocks: blocks as unknown[],
+          created_at: monoIso(),
+        })
         .catch(console.error);
     }
   }

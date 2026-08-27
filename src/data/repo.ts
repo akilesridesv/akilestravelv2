@@ -278,10 +278,16 @@ export async function loadMessages(userId: string): Promise<StoredMessage[]> {
   return (data ?? []).map((r) => ({ id: r.id, role: r.role, blocks: r.blocks ?? [] }));
 }
 
-export async function saveMessage(m: StoredMessage & { user_id: string }): Promise<void> {
-  const { error } = await sb()
-    .from("copilot_messages")
-    .insert({ id: m.id, user_id: m.user_id, role: m.role, blocks: m.blocks });
+export async function saveMessage(
+  m: StoredMessage & { user_id: string; created_at?: string }
+): Promise<void> {
+  const { error } = await sb().from("copilot_messages").insert({
+    id: m.id,
+    user_id: m.user_id,
+    role: m.role,
+    blocks: m.blocks,
+    ...(m.created_at ? { created_at: m.created_at } : {}),
+  });
   if (error) throw error;
 }
 
