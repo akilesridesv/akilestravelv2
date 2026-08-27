@@ -8,9 +8,11 @@ import {
   parseCalendarCommand,
   parseExperienceEdits,
   parseDeadlineHours,
+  parseTierCommand,
   formatDeadline,
   resolveExperience,
 } from "@/ai/edits";
+import { bookingLink } from "@/lib/experience";
 import type { ExperienceDraft } from "@/types/domain";
 import { ExperienceDraftEditor } from "@/components/provider/ExperienceDraftEditor";
 import { BookingsPanel, RevenuePanel, ExperiencesPanel } from "@/components/provider/panels";
@@ -137,6 +139,50 @@ export function CopilotSurface({
             { type: "text", text: `Listo en “${exp.title}”: ${changes.join(" · ")}.` },
           ]);
           onNavigate?.("calendar");
+          break;
+        }
+        case "manage_tiers": {
+          const exp = resolveExperience(value, experiences);
+          if (!exp) {
+            push("assistant", [
+              { type: "text", text: "Primero crea una experiencia para gestionar sus tiers." },
+            ]);
+            break;
+          }
+          const res = parseTierCommand(value, exp);
+          if (!res) {
+            push("assistant", [
+              {
+                type: "text",
+                text: 'No capté el tier. Ej. “agrega un tier VIP a $60 que incluye bebida” o “quita el tier snack”.',
+              },
+            ]);
+            break;
+          }
+          updateExperience(exp.id, { tiers: res.tiers });
+          const count = res.tiers.length;
+          push("assistant", [
+            {
+              type: "text",
+              text: `En “${exp.title}”, ${res.change}. Ahora tiene ${count} tier${count === 1 ? "" : "s"}.`,
+            },
+          ]);
+          break;
+        }
+        case "share_experience": {
+          const exp = resolveExperience(value, experiences);
+          if (!exp) {
+            push("assistant", [
+              { type: "text", text: "¿Cuál experiencia quieres compartir? Aún no tienes ninguna creada." },
+            ]);
+            break;
+          }
+          push("assistant", [
+            {
+              type: "text",
+              text: `Comparte este enlace para reservar “${exp.title}”:\n${bookingLink(exp.id)}`,
+            },
+          ]);
           break;
         }
         case "set_deadline": {

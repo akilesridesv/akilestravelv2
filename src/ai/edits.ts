@@ -1,4 +1,4 @@
-import type { Booking, Experience, RecurringSchedule } from "@/types/domain";
+import type { Booking, Experience, RecurringSchedule, TicketTier } from "@/types/domain";
 import { uid } from "@/lib/utils";
 import { addHours, DAY_ABBR, parseDaysFromText, parseMoney, parseTimeToken, stripAccents } from "@/ai/nlp";
 
@@ -152,6 +152,59 @@ export function parseCalendarCommand(text: string, exp: Experience): CalendarEdi
 
   schedules.sort((a, b) => a.day_of_week - b.day_of_week);
   return { schedules, changes };
+}
+
+// --------------------------------------------------------------------------
+// Tiers by chat: "agrega un tier VIP a $60 que incluye bebida", "quita el tier snack"
+// --------------------------------------------------------------------------
+
+export interface TierEdit {
+  tiers: TicketTier[];
+  change: string;
+}
+
+export function parseTierCommand(text: string, exp: Experience): TierEdit | null {
+  const low = stripAccents(text.toLowerCase());
+  const isRemove = /(quita|quitar|elimina|eliminar|borra|borrar|remueve|remover)/.test(low);
+
+  if (isRemove) {
+    const target = exp.tiers.find((t) =>
+      low.includes(stripAccents(t.tier_name.toLowerCase()))
+    );
+    if (!target) return null;
+    return {
+      tiers: exp.tiers.filter((t) => t.id !== target.id),
+      change: `quité el tier “${target.tier_name}”`,
+    };
+  }
+
+  // add
+  const price = parseMoney(text);
+  const nameM = text.match(
+    /(?:tier|entrada|opci[oó]n)\s+(?:de\s+|llamad[oa]\s+)?["“]?([A-Za-zÁÉÍÓÚÑáéíóúñ0-9 ]{2,30}?)["”]?\s*(?:a\s*\$|\$|por\s|que\s|con\s|de\s*\$|,|$)/i
+  );
+  const name = nameM ? nameM[1].trim() : "";
+  if (!name) return null;
+  const descM = text.match(/(?:que incluye|incluye|con)\s+(.+)$/i);
+  const description = descM
+    ? descM[1]
+        // drop a trailing experience reference like "… en el tour de café"
+        .replace(/\s+(?:en|del|de la|para (?:el|la))\s+(?:tour|experiencia|paseo|clase|taller|excursi[oó]n)\b.*$/i, "")
+        .trim()
+    : "";
+
+  const tier: TicketTier = {
+    id: uid("tier"),
+    tier_name: name,
+    description,
+    price: price ?? 0,
+    quantity_available: 0,
+    quantity_sold: 0,
+  };
+  return {
+    tiers: [...exp.tiers, tier],
+    change: `agregué el tier “${name}”${price != null ? ` a $${price}` : ""}`,
+  };
 }
 
 // --------------------------------------------------------------------------

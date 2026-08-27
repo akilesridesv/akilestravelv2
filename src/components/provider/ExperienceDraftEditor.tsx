@@ -126,10 +126,16 @@ export function ExperienceDraftEditor({
             <Input
               type="number"
               inputMode="decimal"
+              disabled={d.tiers.length > 0}
               value={d.price_per_person || ""}
               onChange={(e) => set("price_per_person", parseFloat(e.target.value) || 0)}
             />
           </div>
+          {d.tiers.length > 0 && (
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Con tiers activos, el precio base se reemplaza por los precios de los tiers.
+            </p>
+          )}
         </div>
 
         <div>

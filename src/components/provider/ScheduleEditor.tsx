@@ -60,10 +60,11 @@ export function ScheduleEditor({
     ]);
   }
   function toggleTier(schedule: RecurringSchedule, tierId: string) {
-    const current = schedule.tier_ids ?? [];
-    const next = current.includes(tierId)
-      ? current.filter((x) => x !== tierId)
-      : [...current, tierId];
+    // Empty/unset means "all tiers apply", so start from the full list — that
+    // way clicking a chip deselects THAT chip (not the others).
+    const base =
+      schedule.tier_ids && schedule.tier_ids.length ? schedule.tier_ids : tiers.map((t) => t.id);
+    const next = base.includes(tierId) ? base.filter((x) => x !== tierId) : [...base, tierId];
     update(schedule.id, { tier_ids: next });
   }
 

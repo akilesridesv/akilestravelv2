@@ -24,7 +24,14 @@ function hueFor(id: string): number {
  * Calendar (agenda) view: the week laid out Monday→Sunday, each day showing its
  * departures across all experiences. A comfortable overview of what runs when.
  */
-export function WeekAgenda({ experiences }: { experiences: Experience[] }) {
+export function WeekAgenda({
+  experiences,
+  onSelect,
+}: {
+  experiences: Experience[];
+  /** Tap a departure to open its experience (e.g. in a modal). */
+  onSelect?: (expId: string) => void;
+}) {
   const departures: Departure[] = experiences.flatMap((e) =>
     e.schedules.map((s) => ({
       expId: e.id,
@@ -65,20 +72,24 @@ export function WeekAgenda({ experiences }: { experiences: Experience[] }) {
               ) : (
                 deps.map((d, i) => {
                   const hue = hueFor(d.expId);
+                  const meta = `${d.capacity} cupos${
+                    d.tierCount ? ` · ${d.tierCount} tier${d.tierCount > 1 ? "s" : ""}` : ""
+                  }`;
                   return (
-                    <div
+                    <button
                       key={i}
-                      className="rounded-lg border-l-[3px] bg-muted/50 px-2 py-1.5"
+                      type="button"
+                      onClick={() => onSelect?.(d.expId)}
+                      disabled={!onSelect}
+                      className="w-full rounded-lg border-l-[3px] bg-muted/50 px-2 py-1.5 text-left transition enabled:hover:bg-muted"
                       style={{ borderLeftColor: `hsl(${hue} 70% 55%)` }}
                     >
                       <div className="flex items-baseline gap-2">
                         <span className="shrink-0 font-display text-sm tabular-nums">{d.time}</span>
-                        <span className="min-w-0 flex-1 truncate text-sm">{d.title}</span>
+                        <span className="min-w-0 flex-1 break-words text-sm">{d.title}</span>
                       </div>
-                      <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                        {d.capacity} cupos{d.tierCount ? ` · ${d.tierCount} tier${d.tierCount > 1 ? "s" : ""}` : ""}
-                      </span>
-                    </div>
+                      <span className="mt-0.5 block text-[11px] text-muted-foreground">{meta}</span>
+                    </button>
                   );
                 })
               )}

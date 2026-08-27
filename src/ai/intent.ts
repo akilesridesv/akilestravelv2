@@ -6,6 +6,8 @@ export type Intent =
   | "edit_experience"
   | "manage_calendar"
   | "set_deadline"
+  | "manage_tiers"
+  | "share_experience"
   | "booking_action"
   | "view_bookings"
   | "view_revenue"
@@ -39,6 +41,13 @@ export function classifyIntent(input: string, context?: string): Intent {
   // 1b. Minimum advance-booking time
   if (/anticip/.test(t) || /\bcon\s+\d+\s*(?:dias?|d|horas?|h)\b/.test(t) || /\d+\s*(?:dias?|horas?)\s+antes/.test(t))
     return "set_deadline";
+
+  // 1c. Share an experience (get its booking link)
+  if (/(comparte|compartir)/.test(t) || /\b(enlace|link)\b/.test(t)) return "share_experience";
+
+  // 1d. Manage tiers (add / remove a ticket tier)
+  if (/\btiers?\b/.test(t) && /(agrega|agregar|anade|anadir|crea|crear|pon|poner|quita|quitar|elimina|eliminar|borra|borrar|remueve|remover)/.test(t))
+    return "manage_tiers";
 
   // 2. Edit an existing experience (edit verb + a field noun, but not a calendar field)
   if (

@@ -11,7 +11,7 @@ import { WeekAgenda } from "@/components/provider/WeekAgenda";
 import { ViewToggle, type PanelView } from "@/components/provider/ViewToggle";
 import { Modal } from "@/components/ui/modal";
 import { deleteImages } from "@/lib/imageStore";
-import { blankDraft, experienceToDraft } from "@/lib/experience";
+import { blankDraft, experienceToDraft, displayPrice, bookingLink } from "@/lib/experience";
 import { formatUSD, dayName, uid, cn } from "@/lib/utils";
 import { addHours } from "@/ai/nlp";
 import type { Booking, Experience, PublicationStatus, RecurringSchedule } from "@/types/domain";
@@ -28,6 +28,8 @@ import {
   Trash2,
   Plus,
   ChevronRight,
+  Share2,
+  Check as CheckIcon,
 } from "lucide-react";
 
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
@@ -61,6 +63,22 @@ export function ExperiencesPanel() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [view, setView] = useState<PanelView>("list");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  async function share(e: Experience) {
+    const url = bookingLink(e.id);
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: e.title, text: `Reserva "${e.title}" en Akiles Travel`, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        setCopiedId(e.id);
+        setTimeout(() => setCopiedId((c) => (c === e.id ? null : c)), 2000);
+      }
+    } catch {
+      /* user cancelled share */
+    }
+  }
 
   if (creating)
     return (
@@ -120,7 +138,10 @@ export function ExperiencesPanel() {
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="min-w-0 flex-1 truncate font-display text-lg">{e.title}</h3>
                   <div className="shrink-0 text-right leading-tight">
-                    <span className="font-display text-lg">{formatUSD(e.price_per_person)}</span>
+                    {displayPrice(e).from && (
+                      <span className="block text-[10px] text-muted-foreground">desde</span>
+                    )}
+                    <span className="font-display text-lg">{formatUSD(displayPrice(e).amount)}</span>
                     <span className="block text-[10px] text-muted-foreground">por persona</span>
                   </div>
                 </div>
@@ -138,15 +159,29 @@ export function ExperiencesPanel() {
                   <span className="inline-flex items-center gap-1">
                     <CalendarDays className="h-3.5 w-3.5" />
                     {e.schedules.length
-                      ? e.schedules.map((s) => dayName(s.day_of_week).slice(0, 3)).join(", ")
+                      ? [...new Set(e.schedules.map((s) => s.day_of_week))]
+                          .sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b))
+                          .map((d) => dayName(d).slice(0, 3))
+                          .join(", ")
                       : "sin salidas"}
                   </span>
                 </div>
               </div>
             </div>
-            <div className="mt-3 flex gap-2 border-t border-border pt-3">
+            <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
               <Button size="sm" variant="outline" onClick={() => setEditingId(e.id)}>
                 <Pencil className="h-4 w-4" /> Editar
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => share(e)}>
+                {copiedId === e.id ? (
+                  <>
+                    <CheckIcon className="h-4 w-4" /> ¡Copiado!
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="h-4 w-4" /> Compartir
+                  </>
+                )}
               </Button>
               <Button
                 size="sm"
@@ -359,7 +394,7 @@ export function CalendarPanel() {
       </div>
 
       {view === "calendar" ? (
-        <WeekAgenda experiences={experiences} />
+        <WeekAgenda experiences={experiences} onSelect={setModalId} />
       ) : (
         // List view: tap a viñeta to open its horarios in a modal (view / modify).
         experiences.map((e) => {

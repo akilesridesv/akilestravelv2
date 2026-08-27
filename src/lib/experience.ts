@@ -1,5 +1,24 @@
 import type { Experience, ExperienceDraft } from "@/types/domain";
 
+/**
+ * When an experience has priced tiers, the base per-person price is replaced by
+ * the tier options — the card shows "desde <lowest tier>".
+ */
+export function displayPrice(e: Pick<Experience, "price_per_person" | "tiers">): {
+  amount: number;
+  from: boolean;
+} {
+  const tierPrices = (e.tiers ?? []).map((t) => t.price).filter((p) => p > 0);
+  if (tierPrices.length) return { amount: Math.min(...tierPrices), from: true };
+  return { amount: e.price_per_person, from: false };
+}
+
+/** The public link a provider shares so tourists can book an experience. */
+export function bookingLink(experienceId: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/e/${experienceId}`;
+}
+
 /** A blank editable draft for manual creation from the panel. */
 export function blankDraft(): ExperienceDraft {
   return {
