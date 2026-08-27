@@ -19,6 +19,15 @@ function clean(v?: string): string | undefined {
 const url = clean(import.meta.env.VITE_SUPABASE_URL as string | undefined);
 const anonKey = clean(import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined);
 
+// Guard against a truncated/masked key pasted into a dashboard (a valid anon
+// JWT is ~200+ chars). Helps diagnose "Invalid API key" fast.
+if (anonKey && anonKey.length < 100) {
+  console.warn(
+    `[supabase] VITE_SUPABASE_ANON_KEY looks too short (${anonKey.length} chars). ` +
+      "It was likely pasted masked/truncated — set the full anon key."
+  );
+}
+
 export const isSupabaseConfigured = Boolean(url && anonKey);
 
 export const supabase: SupabaseClient | null = isSupabaseConfigured
