@@ -99,42 +99,51 @@ export function parseCalendarCommand(text: string, exp: Experience): CalendarEdi
 
   const isClose = /(bloquea|bloquear|cierra|cerrar|quita|quitar|elimina|eliminar|desactiva|cancela|no\s+(?:abras|abra))/.test(low);
   const isOpen = /(abre|abrir|agrega|agregar|anade|anadir|activa|activar|pon|poner|disponible|habilita)/.test(low);
+  const isTimeChange = /(cambia|mueve|mover|corre)/.test(low) && time != null && !isOpen;
 
   const defaultStart = schedules[0]?.start_time ?? time ?? "09:00";
 
   if (days.length && isClose) {
     schedules = schedules.filter((s) => !days.includes(s.day_of_week));
     changes.push(`cerré ${days.map((d) => DAY_ABBR[d]).join(", ")}`);
+  } else if (days.length && isTimeChange) {
+    // change the time of existing departures on those days
+    schedules = schedules.map((s) =>
+      days.includes(s.day_of_week)
+        ? { ...s, start_time: time!, end_time: addHours(time!, exp.duration_hours) }
+        : s
+    );
+    changes.push(`hora de ${days.map((d) => DAY_ABBR[d]).join(", ")} → ${time}`);
   } else if (days.length) {
-    // open / add these days (default action when days are named)
+    // open / add departures — supports MULTIPLE horarios per day
+    const targetTime = time ?? defaultStart;
     for (const dow of days) {
-      if (!schedules.some((s) => s.day_of_week === dow)) {
-        const start = time ?? defaultStart;
+      const exists = schedules.some((s) => s.day_of_week === dow && s.start_time === targetTime);
+      if (!exists) {
         schedules.push({
           id: uid("sch"),
           day_of_week: dow,
-          start_time: start,
-          end_time: addHours(start, exp.duration_hours),
+          start_time: targetTime,
+          end_time: addHours(targetTime, exp.duration_hours),
           capacity: cap ?? exp.max_capacity,
           is_active: true,
+          tier_ids: [],
         });
       }
     }
-    changes.push(`abrí ${days.map((d) => DAY_ABBR[d]).join(", ")}`);
+    changes.push(`abrí ${days.map((d) => DAY_ABBR[d]).join(", ")}${time ? ` a las ${time}` : ""}`);
+  } else if (time) {
+    // no day named: change the time of all departures
+    schedules = schedules.map((s) => ({
+      ...s,
+      start_time: time,
+      end_time: addHours(time, exp.duration_hours),
+    }));
+    changes.push(`hora → ${time}`);
   }
 
-  // time change applies to targeted days, or all if no day specified
-  if (time) {
-    schedules = schedules.map((s) =>
-      !days.length || days.includes(s.day_of_week)
-        ? { ...s, start_time: time, end_time: addHours(time, exp.duration_hours) }
-        : s
-    );
-    if (!changes.some((c) => c.startsWith("abrí"))) changes.push(`hora → ${time}`);
-  }
-
-  // capacity change
-  if (cap != null) {
+  // capacity change (targeted days or all). Skip if we just created rows with it.
+  if (cap != null && !changes.some((c) => c.startsWith("abrí"))) {
     schedules = schedules.map((s) =>
       !days.length || days.includes(s.day_of_week) ? { ...s, capacity: cap } : s
     );
@@ -143,6 +152,24 @@ export function parseCalendarCommand(text: string, exp: Experience): CalendarEdi
 
   schedules.sort((a, b) => a.day_of_week - b.day_of_week);
   return { schedules, changes };
+}
+
+// --------------------------------------------------------------------------
+// Minimum advance booking: "reserva con 3 días de anticipación", "2 horas antes"
+// --------------------------------------------------------------------------
+
+export function parseDeadlineHours(text: string): number | null {
+  const low = stripAccents(text.toLowerCase());
+  const m = low.match(/(\d+)\s*(dias?|d|horas?|h)\b/);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  return m[2].startsWith("d") ? n * 24 : n;
+}
+
+export function formatDeadline(hours: number): string {
+  return hours % 24 === 0 && hours >= 24
+    ? `${hours / 24} día${hours / 24 === 1 ? "" : "s"}`
+    : `${hours} hora${hours === 1 ? "" : "s"}`;
 }
 
 // --------------------------------------------------------------------------

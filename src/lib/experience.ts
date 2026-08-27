@@ -58,5 +58,7 @@ export function draftToPatch(d: ExperienceDraft): Partial<Experience> {
     whats_included: d.whats_included,
     image_urls: d.image_urls,
     featured_image: d.featured_image,
+    tiers: d.tiers,
+    registration_deadline_hours: d.registration_deadline_hours,
   };
 }

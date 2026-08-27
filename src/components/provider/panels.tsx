@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ExperienceDraftEditor } from "@/components/provider/ExperienceDraftEditor";
 import { ExperienceImage } from "@/components/provider/ExperienceImage";
+import { ScheduleEditor } from "@/components/provider/ScheduleEditor";
 import { deleteImages } from "@/lib/imageStore";
 import { blankDraft, experienceToDraft } from "@/lib/experience";
 import { formatUSD, dayName, uid } from "@/lib/utils";
@@ -268,104 +269,24 @@ export function CalendarPanel() {
       <EmptyState
         icon={<CalendarDays className="h-8 w-8" />}
         title="Sin experiencias"
-        hint="Crea una experiencia primero; aquí gestionas sus días de salida. Puedes tocar los días o decirle al copiloto “abre los sábados cupo 10”."
+        hint="Crea una experiencia primero; aquí gestionas sus horarios de salida (varios por día). También por chat: “abre los sábados a las 2pm cupo 10”."
       />
     );
 
-  function toggleDay(e: Experience, dow: number) {
-    const has = e.schedules.some((s) => s.day_of_week === dow);
-    let schedules: RecurringSchedule[];
-    if (has) {
-      schedules = e.schedules.filter((s) => s.day_of_week !== dow);
-    } else {
-      const start = e.schedules[0]?.start_time ?? "09:00";
-      schedules = [
-        ...e.schedules,
-        {
-          id: uid("sch"),
-          day_of_week: dow,
-          start_time: start,
-          end_time: addHours(start, e.duration_hours),
-          capacity: e.schedules[0]?.capacity ?? e.max_capacity,
-          is_active: true,
-        },
-      ].sort((a, b) => a.day_of_week - b.day_of_week);
-    }
-    updateExperience(e.id, { schedules });
-  }
-
-  function setTime(e: Experience, time: string) {
-    if (!time) return;
-    updateExperience(e.id, {
-      schedules: e.schedules.map((s) => ({
-        ...s,
-        start_time: time,
-        end_time: addHours(time, e.duration_hours),
-      })),
-    });
-  }
-
-  function setCapacity(e: Experience, cap: number) {
-    updateExperience(e.id, {
-      schedules: e.schedules.map((s) => ({ ...s, capacity: cap })),
-    });
-  }
-
   return (
     <div className="grid grid-cols-1 gap-3">
-      {experiences.map((e) => {
-        const first = e.schedules[0];
-        return (
-          <Card key={e.id} className="p-4">
-            <h3 className="font-medium">{e.title}</h3>
-            <p className="mb-2 text-xs text-muted-foreground">Toca un día para abrir o cerrar salidas</p>
-            <div className="flex flex-wrap gap-2">
-              {DAY_ORDER.map((dow) => {
-                const active = e.schedules.some((s) => s.day_of_week === dow);
-                return (
-                  <button
-                    key={dow}
-                    type="button"
-                    onClick={() => toggleDay(e, dow)}
-                    className={
-                      "min-w-[52px] rounded-xl px-3 py-2 text-center text-sm transition " +
-                      (active
-                        ? "bg-primary/20 text-ink ring-1 ring-primary"
-                        : "bg-muted text-muted-foreground/60 hover:bg-accent")
-                    }
-                  >
-                    <div className="capitalize">{dayName(dow).slice(0, 3)}</div>
-                    <div className="text-xs">{active ? first?.start_time ?? "09:00" : "—"}</div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {e.schedules.length > 0 && (
-              <div className="mt-3 flex flex-wrap items-end gap-4 border-t border-border pt-3">
-                <label className="text-sm">
-                  <span className="mb-1 block text-xs text-muted-foreground">Hora de inicio</span>
-                  <Input
-                    type="time"
-                    className="h-9 w-32"
-                    value={first?.start_time ?? "09:00"}
-                    onChange={(ev) => setTime(e, ev.target.value)}
-                  />
-                </label>
-                <label className="text-sm">
-                  <span className="mb-1 block text-xs text-muted-foreground">Cupo por salida</span>
-                  <Input
-                    type="number"
-                    className="h-9 w-24"
-                    value={first?.capacity ?? e.max_capacity}
-                    onChange={(ev) => setCapacity(e, parseInt(ev.target.value) || 1)}
-                  />
-                </label>
-              </div>
-            )}
-          </Card>
-        );
-      })}
+      {experiences.map((e) => (
+        <Card key={e.id} className="p-4">
+          <h3 className="mb-2 font-medium">{e.title}</h3>
+          <ScheduleEditor
+            value={e.schedules}
+            onChange={(sch) => updateExperience(e.id, { schedules: sch })}
+            tiers={e.tiers}
+            durationHours={e.duration_hours}
+            defaultCapacity={e.max_capacity}
+          />
+        </Card>
+      ))}
     </div>
   );
 }

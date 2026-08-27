@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input, Textarea, Label } from "@/components/ui/input";
 import { useApp } from "@/state/store";
 import { ImageUploader } from "@/components/provider/ImageUploader";
+import { TierManager } from "@/components/provider/TierManager";
+import { ScheduleEditor } from "@/components/provider/ScheduleEditor";
+import { DeadlineControl } from "@/components/provider/DeadlineControl";
 import { draftToPatch } from "@/lib/experience";
-import { formatUSD, dayName, uid } from "@/lib/utils";
-import { Check, MapPin, Clock, Users, CalendarDays, Sparkles, X } from "lucide-react";
-
-const DAY_OPTIONS = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
+import { formatUSD } from "@/lib/utils";
+import { Check, MapPin, Clock, Users, CalendarDays, Sparkles, X, Ticket, Timer } from "lucide-react";
 
 /**
  * The editable listing card. Used in two modes:
@@ -40,23 +41,6 @@ export function ExperienceDraftEditor({
     setD((prev) => ({ ...prev, [k]: v }));
 
   const isDefault = (k: keyof Experience) => d._sources[k] !== "extracted";
-
-  function toggleDay(dow: number) {
-    const has = d.schedules.some((s) => s.day_of_week === dow);
-    if (has) {
-      set("schedules", d.schedules.filter((s) => s.day_of_week !== dow));
-    } else {
-      const start = d.schedules[0]?.start_time ?? "09:00";
-      set("schedules", [
-        ...d.schedules,
-        { id: uid("sch"), day_of_week: dow, start_time: start, capacity: d.max_capacity, is_active: true },
-      ]);
-    }
-  }
-
-  function setAllTimes(time: string) {
-    set("schedules", d.schedules.map((s) => ({ ...s, start_time: time })));
-  }
 
   const isEdit = mode === "edit";
 
@@ -96,8 +80,6 @@ export function ExperienceDraftEditor({
       </Card>
     );
   }
-
-  const times = Array.from(new Set(d.schedules.map((s) => s.start_time)));
 
   return (
     <Card className="animate-fade-in overflow-hidden">
@@ -197,42 +179,37 @@ export function ExperienceDraftEditor({
           <Textarea value={d.description} onChange={(e) => set("description", e.target.value)} rows={3} />
         </div>
 
-        {/* Schedule */}
+        {/* Tiers */}
         <div className="sm:col-span-2">
           <Label className="inline-flex items-center gap-1">
-            <CalendarDays className="h-3 w-3" /> Días de salida {isDefault("schedules") && <Dot />}
+            <Ticket className="h-3 w-3" /> Tiers (entrada regular, VIP…)
           </Label>
-          <div className="flex flex-wrap gap-2">
-            {DAY_OPTIONS.map((dow) => {
-              const active = d.schedules.some((s) => s.day_of_week === dow);
-              return (
-                <button
-                  key={dow}
-                  type="button"
-                  onClick={() => toggleDay(dow)}
-                  className={
-                    "h-9 min-w-9 rounded-full px-3 text-sm capitalize transition " +
-                    (active
-                      ? "bg-primary text-ink"
-                      : "border border-border bg-transparent text-muted-foreground hover:bg-accent")
-                  }
-                >
-                  {dayName(dow).slice(0, 3)}
-                </button>
-              );
-            })}
-          </div>
-          {d.schedules.length > 0 && (
-            <div className="mt-3 flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Hora de inicio</span>
-              <Input
-                type="time"
-                className="h-9 w-32"
-                value={times[0] ?? "09:00"}
-                onChange={(e) => setAllTimes(e.target.value)}
-              />
-            </div>
-          )}
+          <TierManager value={d.tiers} onChange={(tiers) => set("tiers", tiers)} />
+        </div>
+
+        {/* Schedule — multiple horarios per day */}
+        <div className="sm:col-span-2">
+          <Label className="inline-flex items-center gap-1">
+            <CalendarDays className="h-3 w-3" /> Horarios de salida {isDefault("schedules") && <Dot />}
+          </Label>
+          <ScheduleEditor
+            value={d.schedules}
+            onChange={(sch) => set("schedules", sch)}
+            tiers={d.tiers}
+            durationHours={d.duration_hours}
+            defaultCapacity={d.max_capacity}
+          />
+        </div>
+
+        {/* Minimum advance booking */}
+        <div className="sm:col-span-2">
+          <Label className="inline-flex items-center gap-1">
+            <Timer className="h-3 w-3" /> Anticipación mínima de reserva
+          </Label>
+          <DeadlineControl
+            hours={d.registration_deadline_hours}
+            onChange={(h) => set("registration_deadline_hours", h)}
+          />
         </div>
       </div>
 

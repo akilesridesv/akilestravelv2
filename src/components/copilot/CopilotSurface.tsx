@@ -7,6 +7,8 @@ import {
   parseBookingAction,
   parseCalendarCommand,
   parseExperienceEdits,
+  parseDeadlineHours,
+  formatDeadline,
   resolveExperience,
 } from "@/ai/edits";
 import type { ExperienceDraft } from "@/types/domain";
@@ -135,6 +137,30 @@ export function CopilotSurface({
             { type: "text", text: `Listo en “${exp.title}”: ${changes.join(" · ")}.` },
           ]);
           onNavigate?.("calendar");
+          break;
+        }
+        case "set_deadline": {
+          const exp = resolveExperience(value, experiences);
+          if (!exp) {
+            push("assistant", [
+              { type: "text", text: "Primero crea una experiencia para configurar su anticipación." },
+            ]);
+            break;
+          }
+          const hours = parseDeadlineHours(value);
+          if (hours == null) {
+            push("assistant", [
+              { type: "text", text: 'No capté el tiempo. Ej. “reserva con 3 días de anticipación” o “2 horas antes”.' },
+            ]);
+            break;
+          }
+          updateExperience(exp.id, { registration_deadline_hours: hours });
+          push("assistant", [
+            {
+              type: "text",
+              text: `Anticipación mínima de “${exp.title}” → ${formatDeadline(hours)} antes del inicio.`,
+            },
+          ]);
           break;
         }
         case "booking_action": {

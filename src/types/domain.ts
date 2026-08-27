@@ -43,6 +43,9 @@ export interface RecurringSchedule {
   end_time?: string; // "12:00"
   capacity: number;
   is_active: boolean;
+  // Tiers available for this specific departure. Empty/undefined = all tiers of
+  // the experience apply. Lets pricing/options vary per horario.
+  tier_ids?: string[];
 }
 
 export interface AvailabilitySlot {
@@ -59,9 +62,10 @@ export interface AvailabilitySlot {
 
 export interface TicketTier {
   id: string;
-  tier_name: string;
+  tier_name: string; // "Entrada regular", "Entrada VIP"
+  description?: string; // short legend of what it additionally includes
   price: number;
-  quantity_available: number;
+  quantity_available: number; // 0 = uses the departure's total capacity
   quantity_sold: number;
 }
 

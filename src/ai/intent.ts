@@ -5,6 +5,7 @@ export type Intent =
   | "create_experience"
   | "edit_experience"
   | "manage_calendar"
+  | "set_deadline"
   | "booking_action"
   | "view_bookings"
   | "view_revenue"
@@ -34,6 +35,10 @@ export function classifyIntent(input: string, context?: string): Intent {
   // 1. Booking actions (approve / reject a reservation)
   if (/(aprueba|aprobar|acepta|aceptar|rechaza|rechazar|niega|negar|declina|declinar)/.test(t))
     return "booking_action";
+
+  // 1b. Minimum advance-booking time
+  if (/anticip/.test(t) || /\bcon\s+\d+\s*(?:dias?|d|horas?|h)\b/.test(t) || /\d+\s*(?:dias?|horas?)\s+antes/.test(t))
+    return "set_deadline";
 
   // 2. Edit an existing experience (edit verb + a field noun, but not a calendar field)
   if (
