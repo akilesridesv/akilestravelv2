@@ -68,7 +68,7 @@ export function ExperiencesPanel() {
 
   if (!experiences.length)
     return (
-      <div className="grid gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <EmptyState
           icon={<Inbox className="h-8 w-8" />}
           title="Aún no tienes experiencias"
@@ -81,7 +81,7 @@ export function ExperiencesPanel() {
     );
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-1 gap-3">
       <Button variant="outline" size="sm" className="justify-self-start" onClick={() => setCreating(true)}>
         <Plus className="h-4 w-4" /> Nueva experiencia
       </Button>
@@ -105,11 +105,15 @@ export function ExperiencesPanel() {
                 className="h-16 w-16 shrink-0 rounded-xl"
               />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="truncate font-display text-lg">{e.title}</h3>
-                  {statusBadge(e.publication_status)}
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="min-w-0 flex-1 truncate font-display text-lg">{e.title}</h3>
+                  <div className="shrink-0 text-right leading-tight">
+                    <span className="font-display text-lg">{formatUSD(e.price_per_person)}</span>
+                    <span className="block text-[10px] text-muted-foreground">por persona</span>
+                  </div>
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                  {statusBadge(e.publication_status)}
                   <span className="inline-flex items-center gap-1">
                     <MapPin className="h-3.5 w-3.5" /> {e.city || "Sin ubicación"}
                   </span>
@@ -126,10 +130,6 @@ export function ExperiencesPanel() {
                       : "sin salidas"}
                   </span>
                 </div>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="font-display text-xl">{formatUSD(e.price_per_person)}</p>
-                <p className="text-xs text-muted-foreground">por persona</p>
               </div>
             </div>
             <div className="mt-3 flex gap-2 border-t border-border pt-3">
@@ -178,7 +178,7 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
   );
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-1 gap-3">
       {sorted.map((b) => (
         <Card key={b.id} className="p-4">
           <div className="flex items-start justify-between gap-3">
@@ -243,7 +243,7 @@ export function RevenuePanel() {
   );
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-1 gap-3">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {stat("Ventas brutas", formatUSD(gross), `${earning.length} reservas`)}
         {stat("Tu neto", formatUSD(net), "después de comisión 10%")}
@@ -312,7 +312,7 @@ export function CalendarPanel() {
   }
 
   return (
-    <div className="grid gap-3">
+    <div className="grid grid-cols-1 gap-3">
       {experiences.map((e) => {
         const first = e.schedules[0];
         return (

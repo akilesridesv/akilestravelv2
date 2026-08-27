@@ -114,7 +114,8 @@ export default function ProviderDashboard() {
             "min-[900px]:flex"
           )}
         >
-          <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-border px-3 py-2">
+          {/* Panel tabs live here only on desktop; on mobile the bottom nav switches panels */}
+          <div className="no-scrollbar hidden gap-1 overflow-x-auto border-b border-border px-3 py-2 min-[900px]:flex">
             {PANEL_TABS.map((t) => (
               <button
                 key={t.key}
