@@ -93,17 +93,17 @@ export default function ProviderDashboard() {
         </button>
       </header>
 
-      {/* Body: split on desktop, single view on mobile */}
-      <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[1.15fr_0.85fr]">
+      {/* Body: split (chat left, panel right) from ~900px; single view below */}
+      <div className="flex min-h-0 flex-1 flex-col min-[900px]:grid min-[900px]:grid-cols-[1.15fr_0.85fr]">
         {/* Copilot */}
         <section
           className={cn(
             "min-h-0 flex-1 flex-col",
             view === "copilot" ? "flex" : "hidden",
-            "lg:flex"
+            "min-[900px]:flex"
           )}
         >
-          <CopilotSurface onNavigate={(t) => setView(t as View)} />
+          <CopilotSurface onNavigate={(t) => setView(t as View)} context={activePanel} />
         </section>
 
         {/* Context panels */}
@@ -111,7 +111,7 @@ export default function ProviderDashboard() {
           className={cn(
             "min-h-0 flex-1 flex-col border-l border-border bg-secondary/40",
             view !== "copilot" ? "flex" : "hidden",
-            "lg:flex"
+            "min-[900px]:flex"
           )}
         >
           <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-border px-3 py-2">
@@ -134,8 +134,8 @@ export default function ProviderDashboard() {
         </aside>
       </div>
 
-      {/* Mobile bottom nav */}
-      <nav className="safe-b grid shrink-0 grid-cols-5 border-t border-border bg-background lg:hidden">
+      {/* Mobile bottom nav (hidden once the split view kicks in) */}
+      <nav className="safe-b grid shrink-0 grid-cols-5 border-t border-border bg-background min-[900px]:hidden">
         <MobileTab
           label="Copiloto"
           icon={<MessageSquare className="h-5 w-5" />}

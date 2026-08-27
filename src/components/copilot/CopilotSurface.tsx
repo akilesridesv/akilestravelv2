@@ -43,7 +43,14 @@ const SUGGESTIONS = [
   "¿Cómo va mi mes?",
 ];
 
-export function CopilotSurface({ onNavigate }: { onNavigate?: (tab: string) => void }) {
+export function CopilotSurface({
+  onNavigate,
+  context,
+}: {
+  onNavigate?: (tab: string) => void;
+  /** The panel open on the right — biases how ambiguous messages are read. */
+  context?: string;
+}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -71,7 +78,7 @@ export function CopilotSurface({ onNavigate }: { onNavigate?: (tab: string) => v
     push("user", [{ type: "text", text: value }]);
     setBusy(true);
 
-    const intent = classifyIntent(value);
+    const intent = classifyIntent(value, context);
     try {
       switch (intent) {
         case "create_experience": {
@@ -194,6 +201,14 @@ export function CopilotSurface({ onNavigate }: { onNavigate?: (tab: string) => v
 
   const empty = messages.length === 0;
 
+  const placeholder =
+    ({
+      experiences: "Crea o edita una experiencia…",
+      calendar: "Ej. “abre los sábados con cupo 10”…",
+      bookings: "Ej. “aprueba la de Juan”…",
+      revenue: "Pregunta por tus ingresos…",
+    } as Record<string, string>)[context ?? ""] ?? "Escribe a tu copiloto…";
+
   return (
     <div className="flex h-full flex-col">
       {/* Message stream */}
@@ -229,7 +244,7 @@ export function CopilotSurface({ onNavigate }: { onNavigate?: (tab: string) => v
               }
             }}
             rows={1}
-            placeholder="Escribe a tu copiloto…"
+            placeholder={placeholder}
             className="max-h-40 min-h-[48px] flex-1 resize-none rounded-2xl border border-input bg-card px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           <Button type="submit" size="icon" disabled={!input.trim() || busy} aria-label="Enviar">

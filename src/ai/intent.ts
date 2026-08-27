@@ -23,7 +23,12 @@ const EDIT_VERB = /(edita|editar|modifica|modificar|cambia|cambiar|actualiza|act
 const CAL_VERB = /(abre|abrir|bloquea|bloquear|cierra|cerrar|habilita|habilitar|deshabilita|activa|activar|desactiva|desactivar|disponibilidad|calendario|salidas?)/;
 const DAY = /(sabado|domingo|lunes|martes|miercoles|jueves|viernes|fin de semana|fines de semana|entre semana)/;
 
-export function classifyIntent(input: string): Intent {
+/**
+ * @param context the panel currently open on the right (experiences | calendar |
+ * bookings | revenue). Used as a tiebreaker so an ambiguous message is resolved
+ * in the context of what the provider is looking at.
+ */
+export function classifyIntent(input: string, context?: string): Intent {
   const t = norm(input);
 
   // 1. Booking actions (approve / reject a reservation)
@@ -55,6 +60,19 @@ export function classifyIntent(input: string): Intent {
   // 6. Fallback creation when it still looks like an offering
   if (OFFERING.test(t) || HAS_PRICE(input, t) || /(ofrezco|vendo|tengo un|hago|guio|guiado)/.test(t))
     return "create_experience";
+
+  // 7. Context-aware fallback: resolve against the panel open on the right,
+  // so the chat acts on "what the provider is looking at".
+  switch (context) {
+    case "calendar":
+      return "manage_calendar";
+    case "bookings":
+      return "view_bookings";
+    case "revenue":
+      return "view_revenue";
+    case "experiences":
+      return "view_experiences";
+  }
 
   return "unknown";
 }
