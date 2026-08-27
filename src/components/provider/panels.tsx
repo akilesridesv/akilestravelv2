@@ -7,9 +7,11 @@ import { Input } from "@/components/ui/input";
 import { ExperienceDraftEditor } from "@/components/provider/ExperienceDraftEditor";
 import { ExperienceImage } from "@/components/provider/ExperienceImage";
 import { ScheduleEditor } from "@/components/provider/ScheduleEditor";
+import { WeekAgenda } from "@/components/provider/WeekAgenda";
+import { ViewToggle, type PanelView } from "@/components/provider/ViewToggle";
 import { deleteImages } from "@/lib/imageStore";
 import { blankDraft, experienceToDraft } from "@/lib/experience";
-import { formatUSD, dayName, uid } from "@/lib/utils";
+import { formatUSD, dayName, uid, cn } from "@/lib/utils";
 import { addHours } from "@/ai/nlp";
 import type { Booking, Experience, PublicationStatus, RecurringSchedule } from "@/types/domain";
 import {
@@ -24,6 +26,7 @@ import {
   Pencil,
   Trash2,
   Plus,
+  ChevronDown,
 } from "lucide-react";
 
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
@@ -56,6 +59,7 @@ export function ExperiencesPanel() {
   const removeExperience = useApp((s) => s.removeExperience);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [view, setView] = useState<PanelView>("list");
 
   if (creating)
     return (
@@ -83,12 +87,18 @@ export function ExperiencesPanel() {
 
   return (
     <div className="grid grid-cols-1 gap-3">
-      <Button variant="outline" size="sm" className="justify-self-start" onClick={() => setCreating(true)}>
-        <Plus className="h-4 w-4" /> Nueva experiencia
-      </Button>
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
+          <Plus className="h-4 w-4" /> Nueva
+        </Button>
+        <ViewToggle value={view} onChange={setView} />
+      </div>
 
-      {experiences.map((e) =>
-        editingId === e.id ? (
+      {view === "calendar" ? (
+        <WeekAgenda experiences={experiences} />
+      ) : (
+        experiences.map((e) =>
+          editingId === e.id ? (
           <ExperienceDraftEditor
             key={e.id}
             initial={experienceToDraft(e)}
@@ -152,6 +162,7 @@ export function ExperiencesPanel() {
               </Button>
             </div>
           </Card>
+          )
         )
       )}
     </div>
@@ -263,6 +274,10 @@ export function RevenuePanel() {
 export function CalendarPanel() {
   const experiences = useApp((s) => s.experiences);
   const updateExperience = useApp((s) => s.updateExperience);
+  const [view, setView] = useState<PanelView>("list");
+  const [openId, setOpenId] = useState<string | null>(
+    experiences.length === 1 ? experiences[0].id : null
+  );
 
   if (!experiences.length)
     return (
@@ -275,18 +290,56 @@ export function CalendarPanel() {
 
   return (
     <div className="grid grid-cols-1 gap-3">
-      {experiences.map((e) => (
-        <Card key={e.id} className="p-4">
-          <h3 className="mb-2 font-medium">{e.title}</h3>
-          <ScheduleEditor
-            value={e.schedules}
-            onChange={(sch) => updateExperience(e.id, { schedules: sch })}
-            tiers={e.tiers}
-            durationHours={e.duration_hours}
-            defaultCapacity={e.max_capacity}
-          />
-        </Card>
-      ))}
+      <div className="flex items-center justify-end">
+        <ViewToggle value={view} onChange={setView} />
+      </div>
+
+      {view === "calendar" ? (
+        <WeekAgenda experiences={experiences} />
+      ) : (
+        // List view: an accordion — select an experience to expand its horarios.
+        experiences.map((e) => {
+          const open = openId === e.id;
+          const days = [...new Set(e.schedules.map((s) => s.day_of_week))]
+            .sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b))
+            .map((d) => dayName(d).slice(0, 3))
+            .join(", ");
+          return (
+            <Card key={e.id} className="overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setOpenId(open ? null : e.id)}
+                className="flex w-full items-center gap-3 p-4 text-left"
+              >
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate font-medium">{e.title}</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {e.schedules.length} salida{e.schedules.length === 1 ? "" : "s"}
+                    {e.schedules.length ? ` · ${days}` : " · sin salidas"}
+                  </p>
+                </div>
+                <ChevronDown
+                  className={cn(
+                    "h-5 w-5 shrink-0 text-muted-foreground transition-transform",
+                    open && "rotate-180"
+                  )}
+                />
+              </button>
+              {open && (
+                <div className="border-t border-border p-4">
+                  <ScheduleEditor
+                    value={e.schedules}
+                    onChange={(sch) => updateExperience(e.id, { schedules: sch })}
+                    tiers={e.tiers}
+                    durationHours={e.duration_hours}
+                    defaultCapacity={e.max_capacity}
+                  />
+                </div>
+              )}
+            </Card>
+          );
+        })
+      )}
     </div>
   );
 }
