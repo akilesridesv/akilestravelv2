@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea, Label } from "@/components/ui/input";
 import { useApp } from "@/state/store";
+import { ImageUploader } from "@/components/provider/ImageUploader";
 import { draftToPatch } from "@/lib/experience";
 import { formatUSD, dayName, uid } from "@/lib/utils";
 import { Check, MapPin, Clock, Users, CalendarDays, Sparkles, X } from "lucide-react";
@@ -119,6 +120,16 @@ export function ExperienceDraftEditor({
       </div>
 
       <div className="grid gap-4 p-4 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <Label>Imágenes de la experiencia</Label>
+          <ImageUploader
+            value={d.image_urls}
+            onChange={(refs) =>
+              setD((prev) => ({ ...prev, image_urls: refs, featured_image: refs[0] }))
+            }
+          />
+        </div>
+
         <div className="sm:col-span-2">
           <Label>Título</Label>
           <Input value={d.title} onChange={(e) => set("title", e.target.value)} />

@@ -1,17 +1,30 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Landing from "@/pages/Landing";
-import Auth from "@/pages/Auth";
-import ProviderDashboard from "@/pages/ProviderDashboard";
+
+// Code-split heavier routes so the landing loads with a minimal bundle.
+const Auth = lazy(() => import("@/pages/Auth"));
+const ProviderDashboard = lazy(() => import("@/pages/ProviderDashboard"));
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-background">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/auth" element={<Auth />} />
-        <Route path="/panel" element={<ProviderDashboard />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/panel" element={<ProviderDashboard />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

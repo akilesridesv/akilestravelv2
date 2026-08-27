@@ -56,5 +56,7 @@ export function draftToPatch(d: ExperienceDraft): Partial<Experience> {
     schedules: d.schedules,
     highlights: d.highlights,
     whats_included: d.whats_included,
+    image_urls: d.image_urls,
+    featured_image: d.featured_image,
   };
 }

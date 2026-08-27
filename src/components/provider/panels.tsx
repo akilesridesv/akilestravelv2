@@ -5,6 +5,8 @@ import { Card, Badge } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ExperienceDraftEditor } from "@/components/provider/ExperienceDraftEditor";
+import { ExperienceImage } from "@/components/provider/ExperienceImage";
+import { deleteImages } from "@/lib/imageStore";
 import { blankDraft, experienceToDraft } from "@/lib/experience";
 import { formatUSD, dayName, uid } from "@/lib/utils";
 import { addHours } from "@/ai/nlp";
@@ -96,8 +98,13 @@ export function ExperiencesPanel() {
           />
         ) : (
           <Card key={e.id} className="p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+            <div className="flex items-start gap-3">
+              <ExperienceImage
+                imageRef={e.featured_image}
+                alt={e.title}
+                className="h-16 w-16 shrink-0 rounded-xl"
+              />
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <h3 className="truncate font-display text-lg">{e.title}</h3>
                   {statusBadge(e.publication_status)}
@@ -134,7 +141,10 @@ export function ExperiencesPanel() {
                 variant="ghost"
                 className="text-muted-foreground"
                 onClick={() => {
-                  if (confirm(`¿Eliminar “${e.title}”?`)) removeExperience(e.id);
+                  if (confirm(`¿Eliminar “${e.title}”?`)) {
+                    void deleteImages(e.image_urls);
+                    removeExperience(e.id);
+                  }
                 }}
               >
                 <Trash2 className="h-4 w-4" /> Eliminar
