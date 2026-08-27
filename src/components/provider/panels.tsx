@@ -1,9 +1,14 @@
 import * as React from "react";
+import { useState } from "react";
 import { useApp } from "@/state/store";
 import { Card, Badge } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatUSD, dayName } from "@/lib/utils";
-import type { Booking, PublicationStatus } from "@/types/domain";
+import { Input } from "@/components/ui/input";
+import { ExperienceDraftEditor } from "@/components/provider/ExperienceDraftEditor";
+import { blankDraft, experienceToDraft } from "@/lib/experience";
+import { formatUSD, dayName, uid } from "@/lib/utils";
+import { addHours } from "@/ai/nlp";
+import type { Booking, Experience, PublicationStatus, RecurringSchedule } from "@/types/domain";
 import {
   CalendarDays,
   Check,
@@ -13,7 +18,12 @@ import {
   MapPin,
   Inbox,
   TrendingUp,
+  Pencil,
+  Trash2,
+  Plus,
 } from "lucide-react";
+
+const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
 
 function statusBadge(s: PublicationStatus) {
   const map = {
@@ -40,51 +50,99 @@ function EmptyState({ icon, title, hint }: { icon: React.ReactNode; title: strin
 
 export function ExperiencesPanel() {
   const experiences = useApp((s) => s.experiences);
+  const removeExperience = useApp((s) => s.removeExperience);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  if (creating)
+    return (
+      <ExperienceDraftEditor
+        initial={blankDraft()}
+        mode="create"
+        onCancel={() => setCreating(false)}
+        onDone={() => setCreating(false)}
+      />
+    );
 
   if (!experiences.length)
     return (
-      <EmptyState
-        icon={<Inbox className="h-8 w-8" />}
-        title="Aún no tienes experiencias"
-        hint="Describe tu experiencia en el copiloto y créala en segundos: “Tour de café en Ataco, 3h, $35, martes y jueves 9am, máx 8”."
-      />
+      <div className="grid gap-3">
+        <EmptyState
+          icon={<Inbox className="h-8 w-8" />}
+          title="Aún no tienes experiencias"
+          hint="Descríbela en el copiloto (“Tour de café en Ataco, 3h, $35, martes y jueves 9am”), o créala a mano."
+        />
+        <Button variant="outline" onClick={() => setCreating(true)}>
+          <Plus className="h-4 w-4" /> Nueva experiencia a mano
+        </Button>
+      </div>
     );
 
   return (
     <div className="grid gap-3">
-      {experiences.map((e) => (
-        <Card key={e.id} className="p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="truncate font-display text-lg">{e.title}</h3>
-                {statusBadge(e.publication_status)}
+      <Button variant="outline" size="sm" className="justify-self-start" onClick={() => setCreating(true)}>
+        <Plus className="h-4 w-4" /> Nueva experiencia
+      </Button>
+
+      {experiences.map((e) =>
+        editingId === e.id ? (
+          <ExperienceDraftEditor
+            key={e.id}
+            initial={experienceToDraft(e)}
+            mode="edit"
+            experienceId={e.id}
+            onCancel={() => setEditingId(null)}
+            onDone={() => setEditingId(null)}
+          />
+        ) : (
+          <Card key={e.id} className="p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="truncate font-display text-lg">{e.title}</h3>
+                  {statusBadge(e.publication_status)}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5" /> {e.city || "Sin ubicación"}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5" /> {e.duration_hours}h
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Users className="h-3.5 w-3.5" /> hasta {e.max_capacity}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    {e.schedules.length
+                      ? e.schedules.map((s) => dayName(s.day_of_week).slice(0, 3)).join(", ")
+                      : "sin salidas"}
+                  </span>
+                </div>
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5" /> {e.city || "Sin ubicación"}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5" /> {e.duration_hours}h
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Users className="h-3.5 w-3.5" /> hasta {e.max_capacity}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  {e.schedules.length
-                    ? e.schedules.map((s) => dayName(s.day_of_week).slice(0, 3)).join(", ")
-                    : "sin salidas"}
-                </span>
+              <div className="shrink-0 text-right">
+                <p className="font-display text-xl">{formatUSD(e.price_per_person)}</p>
+                <p className="text-xs text-muted-foreground">por persona</p>
               </div>
             </div>
-            <div className="shrink-0 text-right">
-              <p className="font-display text-xl">{formatUSD(e.price_per_person)}</p>
-              <p className="text-xs text-muted-foreground">por persona</p>
+            <div className="mt-3 flex gap-2 border-t border-border pt-3">
+              <Button size="sm" variant="outline" onClick={() => setEditingId(e.id)}>
+                <Pencil className="h-4 w-4" /> Editar
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground"
+                onClick={() => {
+                  if (confirm(`¿Eliminar “${e.title}”?`)) removeExperience(e.id);
+                }}
+              >
+                <Trash2 className="h-4 w-4" /> Eliminar
+              </Button>
             </div>
-          </div>
-        </Card>
-      ))}
+          </Card>
+        )
+      )}
     </div>
   );
 }
@@ -193,41 +251,111 @@ export function RevenuePanel() {
 
 export function CalendarPanel() {
   const experiences = useApp((s) => s.experiences);
-  const withSchedules = experiences.filter((e) => e.schedules.length);
+  const updateExperience = useApp((s) => s.updateExperience);
 
-  if (!withSchedules.length)
+  if (!experiences.length)
     return (
       <EmptyState
         icon={<CalendarDays className="h-8 w-8" />}
-        title="Sin salidas configuradas"
-        hint="Crea una experiencia con días de salida, o dile al copiloto “abre todos los sábados con cupo 10”."
+        title="Sin experiencias"
+        hint="Crea una experiencia primero; aquí gestionas sus días de salida. Puedes tocar los días o decirle al copiloto “abre los sábados cupo 10”."
       />
     );
 
+  function toggleDay(e: Experience, dow: number) {
+    const has = e.schedules.some((s) => s.day_of_week === dow);
+    let schedules: RecurringSchedule[];
+    if (has) {
+      schedules = e.schedules.filter((s) => s.day_of_week !== dow);
+    } else {
+      const start = e.schedules[0]?.start_time ?? "09:00";
+      schedules = [
+        ...e.schedules,
+        {
+          id: uid("sch"),
+          day_of_week: dow,
+          start_time: start,
+          end_time: addHours(start, e.duration_hours),
+          capacity: e.schedules[0]?.capacity ?? e.max_capacity,
+          is_active: true,
+        },
+      ].sort((a, b) => a.day_of_week - b.day_of_week);
+    }
+    updateExperience(e.id, { schedules });
+  }
+
+  function setTime(e: Experience, time: string) {
+    if (!time) return;
+    updateExperience(e.id, {
+      schedules: e.schedules.map((s) => ({
+        ...s,
+        start_time: time,
+        end_time: addHours(time, e.duration_hours),
+      })),
+    });
+  }
+
+  function setCapacity(e: Experience, cap: number) {
+    updateExperience(e.id, {
+      schedules: e.schedules.map((s) => ({ ...s, capacity: cap })),
+    });
+  }
+
   return (
     <div className="grid gap-3">
-      {withSchedules.map((e) => (
-        <Card key={e.id} className="p-4">
-          <h3 className="font-medium">{e.title}</h3>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {[1, 2, 3, 4, 5, 6, 0].map((dow) => {
-              const s = e.schedules.find((x) => x.day_of_week === dow);
-              return (
-                <div
-                  key={dow}
-                  className={
-                    "rounded-xl px-3 py-2 text-center text-sm " +
-                    (s ? "bg-primary/15 text-ink" : "bg-muted text-muted-foreground/50")
-                  }
-                >
-                  <div className="capitalize">{dayName(dow).slice(0, 3)}</div>
-                  <div className="text-xs">{s ? s.start_time : "—"}</div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      ))}
+      {experiences.map((e) => {
+        const first = e.schedules[0];
+        return (
+          <Card key={e.id} className="p-4">
+            <h3 className="font-medium">{e.title}</h3>
+            <p className="mb-2 text-xs text-muted-foreground">Toca un día para abrir o cerrar salidas</p>
+            <div className="flex flex-wrap gap-2">
+              {DAY_ORDER.map((dow) => {
+                const active = e.schedules.some((s) => s.day_of_week === dow);
+                return (
+                  <button
+                    key={dow}
+                    type="button"
+                    onClick={() => toggleDay(e, dow)}
+                    className={
+                      "min-w-[52px] rounded-xl px-3 py-2 text-center text-sm transition " +
+                      (active
+                        ? "bg-primary/20 text-ink ring-1 ring-primary"
+                        : "bg-muted text-muted-foreground/60 hover:bg-accent")
+                    }
+                  >
+                    <div className="capitalize">{dayName(dow).slice(0, 3)}</div>
+                    <div className="text-xs">{active ? first?.start_time ?? "09:00" : "—"}</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {e.schedules.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-end gap-4 border-t border-border pt-3">
+                <label className="text-sm">
+                  <span className="mb-1 block text-xs text-muted-foreground">Hora de inicio</span>
+                  <Input
+                    type="time"
+                    className="h-9 w-32"
+                    value={first?.start_time ?? "09:00"}
+                    onChange={(ev) => setTime(e, ev.target.value)}
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-xs text-muted-foreground">Cupo por salida</span>
+                  <Input
+                    type="number"
+                    className="h-9 w-24"
+                    value={first?.capacity ?? e.max_capacity}
+                    onChange={(ev) => setCapacity(e, parseInt(ev.target.value) || 1)}
+                  />
+                </label>
+              </div>
+            )}
+          </Card>
+        );
+      })}
     </div>
   );
 }

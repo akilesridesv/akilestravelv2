@@ -4,24 +4,34 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea, Label } from "@/components/ui/input";
 import { useApp } from "@/state/store";
+import { draftToPatch } from "@/lib/experience";
 import { formatUSD, dayName, uid } from "@/lib/utils";
-import { Check, MapPin, Clock, Users, CalendarDays, Plus, Trash2, Sparkles } from "lucide-react";
+import { Check, MapPin, Clock, Users, CalendarDays, Sparkles, X } from "lucide-react";
 
 const DAY_OPTIONS = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
 
 /**
- * The editable listing the copilot renders after extracting a natural-language
- * description. This is the "sell in minutes" moment: everything is pre-filled,
- * the provider tweaks and publishes.
+ * The editable listing card. Used in two modes:
+ *  - "create": the copilot renders it after extracting a natural-language
+ *    description → provider tweaks → publishes (pending_review).
+ *  - "edit": opened from the Experiences panel or a chat edit → provider
+ *    tweaks → saves changes to an existing experience.
  */
 export function ExperienceDraftEditor({
   initial,
-  onPublished,
+  mode = "create",
+  experienceId,
+  onDone,
+  onCancel,
 }: {
   initial: ExperienceDraft;
-  onPublished: (title: string) => void;
+  mode?: "create" | "edit";
+  experienceId?: string;
+  onDone?: (title: string) => void;
+  onCancel?: () => void;
 }) {
   const publishDraft = useApp((s) => s.publishDraft);
+  const updateExperience = useApp((s) => s.updateExperience);
   const [d, setD] = useState<ExperienceDraft>(initial);
   const [published, setPublished] = useState(false);
 
@@ -47,10 +57,16 @@ export function ExperienceDraftEditor({
     set("schedules", d.schedules.map((s) => ({ ...s, start_time: time })));
   }
 
-  function publish() {
-    publishDraft(d);
+  const isEdit = mode === "edit";
+
+  function save() {
+    if (isEdit && experienceId) {
+      updateExperience(experienceId, draftToPatch(d));
+    } else {
+      publishDraft(d);
+    }
     setPublished(true);
-    onPublished(d.title);
+    onDone?.(d.title);
   }
 
   if (published) {
@@ -61,9 +77,18 @@ export function ExperienceDraftEditor({
             <Check className="h-5 w-5" />
           </div>
           <div>
-            <p className="font-display text-lg">¡Publicada para revisión!</p>
+            <p className="font-display text-lg">
+              {isEdit ? "Cambios guardados" : "¡Publicada para revisión!"}
+            </p>
             <p className="text-sm text-muted-foreground">
-              “{d.title}” quedó en <b>pendiente de revisión</b>. La verificamos y en cuanto se apruebe estará visible para turistas.
+              {isEdit ? (
+                <>Actualicé “{d.title}”.</>
+              ) : (
+                <>
+                  “{d.title}” quedó en <b>pendiente de revisión</b>. La verificamos y en cuanto se
+                  apruebe estará visible para turistas.
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -77,8 +102,20 @@ export function ExperienceDraftEditor({
     <Card className="animate-fade-in overflow-hidden">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <Sparkles className="h-4 w-4 text-primary" />
-        <span className="text-sm font-medium">Ficha lista para revisar</span>
-        <span className="ml-auto text-xs text-muted-foreground">Editá lo que quieras y publicá</span>
+        <span className="text-sm font-medium">
+          {isEdit ? "Editar experiencia" : "Ficha lista para revisar"}
+        </span>
+        {onCancel ? (
+          <button
+            onClick={onCancel}
+            aria-label="Cerrar"
+            className="ml-auto rounded-full p-1 text-muted-foreground hover:bg-accent"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : (
+          <span className="ml-auto text-xs text-muted-foreground">Editá lo que quieras y publicá</span>
+        )}
       </div>
 
       <div className="grid gap-4 p-4 sm:grid-cols-2">
@@ -190,12 +227,18 @@ export function ExperienceDraftEditor({
 
       <div className="flex flex-col gap-2 border-t border-border p-4 sm:flex-row sm:items-center">
         <p className="text-sm text-muted-foreground">
-          Se publicará como <b>{formatUSD(d.price_per_person)}</b> / persona
-          {d.city ? ` en ${d.city}` : ""}.
+          {formatUSD(d.price_per_person)} / persona{d.city ? ` en ${d.city}` : ""}.
         </p>
-        <Button className="sm:ml-auto" onClick={publish} disabled={!d.title || !d.price_per_person}>
-          <Check className="h-4 w-4" /> Publicar para revisión
-        </Button>
+        <div className="flex gap-2 sm:ml-auto">
+          {onCancel && (
+            <Button variant="outline" onClick={onCancel}>
+              Cancelar
+            </Button>
+          )}
+          <Button onClick={save} disabled={!d.title || !d.price_per_person}>
+            <Check className="h-4 w-4" /> {isEdit ? "Guardar cambios" : "Publicar para revisión"}
+          </Button>
+        </div>
       </div>
     </Card>
   );

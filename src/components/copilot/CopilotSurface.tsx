@@ -3,9 +3,17 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { extractExperience } from "@/ai/extractExperience";
 import { classifyIntent } from "@/ai/intent";
+import {
+  parseBookingAction,
+  parseCalendarCommand,
+  parseExperienceEdits,
+  resolveExperience,
+} from "@/ai/edits";
 import type { ExperienceDraft } from "@/types/domain";
 import { ExperienceDraftEditor } from "@/components/provider/ExperienceDraftEditor";
 import { BookingsPanel, RevenuePanel, ExperiencesPanel } from "@/components/provider/panels";
+import { useApp } from "@/state/store";
+import { experienceToDraft } from "@/lib/experience";
 import { uid } from "@/lib/utils";
 import { ArrowUp, Sparkles } from "lucide-react";
 
@@ -13,7 +21,12 @@ import { ArrowUp, Sparkles } from "lucide-react";
 type Block =
   | { type: "text"; text: string }
   | { type: "assumptions"; items: string[] }
-  | { type: "experience_draft"; draft: ExperienceDraft }
+  | {
+      type: "experience_draft";
+      draft: ExperienceDraft;
+      mode?: "create" | "edit";
+      experienceId?: string;
+    }
   | { type: "bookings" }
   | { type: "revenue" }
   | { type: "experiences" };
@@ -35,6 +48,13 @@ export function CopilotSurface({ onNavigate }: { onNavigate?: (tab: string) => v
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Shared application state — the copilot reads and writes the same store the
+  // direct panels use, so a chat edit and a manual edit are the same action.
+  const experiences = useApp((s) => s.experiences);
+  const bookings = useApp((s) => s.bookings);
+  const updateExperience = useApp((s) => s.updateExperience);
+  const setBookingStatus = useApp((s) => s.setBookingStatus);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -62,6 +82,75 @@ export function CopilotSurface({ onNavigate }: { onNavigate?: (tab: string) => v
           push("assistant", blocks);
           break;
         }
+        case "edit_experience": {
+          const exp = resolveExperience(value, experiences);
+          if (!exp) {
+            push("assistant", [
+              { type: "text", text: "Aún no tienes experiencias que editar. Crea una describiéndola." },
+            ]);
+            break;
+          }
+          const { patch, changes } = parseExperienceEdits(value, exp);
+          if (changes.length) {
+            updateExperience(exp.id, patch);
+            push("assistant", [
+              { type: "text", text: `Actualicé “${exp.title}”: ${changes.join(", ")}.` },
+              { type: "experiences" },
+            ]);
+          } else {
+            push("assistant", [
+              { type: "text", text: `Abrí “${exp.title}” para que la edites 👇` },
+              { type: "experience_draft", draft: experienceToDraft(exp), mode: "edit", experienceId: exp.id },
+            ]);
+          }
+          break;
+        }
+        case "manage_calendar": {
+          const exp = resolveExperience(value, experiences);
+          if (!exp) {
+            push("assistant", [
+              { type: "text", text: "Primero crea una experiencia; luego puedo abrir o bloquear sus salidas." },
+            ]);
+            break;
+          }
+          const { schedules, changes } = parseCalendarCommand(value, exp);
+          if (!changes.length) {
+            push("assistant", [
+              {
+                type: "text",
+                text: 'No capté el cambio. Prueba: “abre los sábados con cupo 10”, “bloquea los lunes” o “cambia la hora a 10am”.',
+              },
+            ]);
+            break;
+          }
+          updateExperience(exp.id, { schedules });
+          push("assistant", [
+            { type: "text", text: `Listo en “${exp.title}”: ${changes.join(" · ")}.` },
+          ]);
+          onNavigate?.("calendar");
+          break;
+        }
+        case "booking_action": {
+          const act = parseBookingAction(value, bookings);
+          if (!act) {
+            push("assistant", [
+              { type: "text", text: "¿Cuál reserva? Dime el nombre, por ejemplo “aprueba la de Juan”." },
+            ]);
+            break;
+          }
+          setBookingStatus(act.booking.id, act.action === "approve" ? "confirmed" : "rejected");
+          push("assistant", [
+            {
+              type: "text",
+              text:
+                act.action === "approve"
+                  ? `Aprobé y cobré la reserva de ${act.booking.contact_name} (${act.booking.number_of_people} pers).`
+                  : `Rechacé la reserva de ${act.booking.contact_name}.`,
+            },
+            { type: "bookings" },
+          ]);
+          break;
+        }
         case "view_bookings":
           push("assistant", [
             { type: "text", text: "Estas son tus reservas. Puedes aprobar o rechazar las pendientes aquí mismo." },
@@ -80,21 +169,12 @@ export function CopilotSurface({ onNavigate }: { onNavigate?: (tab: string) => v
             { type: "experiences" },
           ]);
           break;
-        case "manage_calendar":
-          push("assistant", [
-            {
-              type: "text",
-              text: "El calendario en lenguaje natural (“abre todos los sábados cupo 10”, “bloquea del 15 al 20”) llega en la Fase 2. Por ahora, abre la pestaña Calendario para ver tus salidas.",
-            },
-          ]);
-          onNavigate?.("calendar");
-          break;
         case "help":
           push("assistant", [
             {
               type: "text",
               text:
-                "Soy tu copiloto de negocio. Puedo: crear una experiencia si me la describes en una frase, mostrarte tus reservas, tus ingresos y tus experiencias. Escríbeme como le hablarías a un asistente.",
+                "Soy tu copiloto de negocio. Puedo: crear una experiencia (descríbela en una frase), editarla (“sube el precio del tour de café a $40”), manejar el calendario (“abre los sábados cupo 10”, “bloquea los lunes”), y aprobar o rechazar reservas (“aprueba la de Juan”). También muéstrame tus reservas, ingresos y experiencias. Todo lo puedes hacer también a mano en los paneles.",
             },
           ]);
           break;
@@ -149,7 +229,7 @@ export function CopilotSurface({ onNavigate }: { onNavigate?: (tab: string) => v
               }
             }}
             rows={1}
-            placeholder="Describe una experiencia o pregunta por tu negocio…"
+            placeholder="Escribe a tu copiloto…"
             className="max-h-40 min-h-[48px] flex-1 resize-none rounded-2xl border border-input bg-card px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           <Button type="submit" size="icon" disabled={!input.trim() || busy} aria-label="Enviar">
@@ -228,7 +308,14 @@ function BlockView({ block, isUser }: { block: Block; isUser: boolean }) {
         </Card>
       );
     case "experience_draft":
-      return <ExperienceDraftEditor initial={block.draft} onPublished={() => {}} />;
+      return (
+        <ExperienceDraftEditor
+          initial={block.draft}
+          mode={block.mode}
+          experienceId={block.experienceId}
+          onDone={() => {}}
+        />
+      );
     case "bookings":
       return <BookingsPanel />;
     case "revenue":

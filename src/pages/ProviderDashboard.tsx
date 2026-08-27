@@ -60,9 +60,9 @@ export default function ProviderDashboard() {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-background">
+    <div className="flex h-dvh flex-col overflow-hidden bg-background">
       {/* Header */}
-      <header className="flex items-center gap-3 border-b border-border px-4 py-3 sm:px-6">
+      <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3 sm:px-6">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary font-display text-lg text-ink">
           A
         </div>
@@ -94,11 +94,11 @@ export default function ProviderDashboard() {
       </header>
 
       {/* Body: split on desktop, single view on mobile */}
-      <div className="min-h-0 flex-1 lg:grid lg:grid-cols-[1.15fr_0.85fr]">
+      <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[1.15fr_0.85fr]">
         {/* Copilot */}
         <section
           className={cn(
-            "min-h-0 flex-col",
+            "min-h-0 flex-1 flex-col",
             view === "copilot" ? "flex" : "hidden",
             "lg:flex"
           )}
@@ -109,7 +109,7 @@ export default function ProviderDashboard() {
         {/* Context panels */}
         <aside
           className={cn(
-            "min-h-0 flex-col border-l border-border bg-secondary/40",
+            "min-h-0 flex-1 flex-col border-l border-border bg-secondary/40",
             view !== "copilot" ? "flex" : "hidden",
             "lg:flex"
           )}
@@ -135,7 +135,7 @@ export default function ProviderDashboard() {
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="safe-b grid grid-cols-5 border-t border-border bg-background lg:hidden">
+      <nav className="safe-b grid shrink-0 grid-cols-5 border-t border-border bg-background lg:hidden">
         <MobileTab
           label="Copiloto"
           icon={<MessageSquare className="h-5 w-5" />}
