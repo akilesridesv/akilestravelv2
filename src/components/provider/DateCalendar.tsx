@@ -29,6 +29,18 @@ export function DateCalendar({
   const anchor = useRef<string | null>(null);
   const [time, setTime] = useState("09:00");
   const [capacity, setCapacity] = useState(experience.max_capacity || 10);
+  const [tierSel, setTierSel] = useState<Set<string>>(
+    () => new Set(experience.tiers.map((t) => t.id))
+  );
+
+  function toggleTier(id: string) {
+    setTierSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const slotByDate = new Map(slots.map((s) => [s.slot_date, s]));
 
@@ -73,6 +85,7 @@ export function DateCalendar({
     if (action === "remove") {
       next = next.filter((s) => !picked.has(s.slot_date));
     } else {
+      const tierIds = experience.tiers.length ? [...tierSel] : undefined;
       for (const date of picked) {
         const existing = next.find((s) => s.slot_date === date);
         const end = addHours(time, experience.duration_hours);
@@ -81,6 +94,7 @@ export function DateCalendar({
           existing.end_time = end;
           existing.capacity = capacity;
           existing.status = "open";
+          existing.tier_ids = tierIds;
         } else {
           next.push({
             id: uid("ds"),
@@ -89,6 +103,7 @@ export function DateCalendar({
             end_time: end,
             capacity,
             status: "open",
+            tier_ids: tierIds,
           });
         }
       }
@@ -194,6 +209,35 @@ export function DateCalendar({
               />
             </label>
           </div>
+
+          {experience.tiers.length > 0 && (
+            <div className="mt-3">
+              <span className="mb-1 block text-xs text-muted-foreground">
+                Tiers disponibles en estas fechas
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {experience.tiers.map((t) => {
+                  const active = tierSel.has(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => toggleTier(t.id)}
+                      className={cn(
+                        "rounded-full px-2.5 py-1 text-xs transition",
+                        active
+                          ? "bg-primary/20 text-ink ring-1 ring-primary"
+                          : "border border-border text-muted-foreground hover:bg-accent"
+                      )}
+                    >
+                      {t.tier_name || "Sin nombre"}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="mt-3 flex flex-wrap gap-2">
             <Button size="sm" onClick={() => apply("open")}>
               <Check className="h-4 w-4" /> Habilitar

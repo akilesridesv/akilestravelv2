@@ -126,7 +126,7 @@ export function TodayAgenda({
         title: e.title,
         time: s.start_time,
         capacity: s.capacity,
-        tierCount: e.tiers.length,
+        tierCount: s.tier_ids?.length ?? e.tiers.length,
       }));
     return [...fromRecurring, ...fromDates];
   });

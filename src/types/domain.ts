@@ -69,6 +69,8 @@ export interface DateSlot {
   end_time?: string;
   capacity: number;
   status: "open" | "blocked";
+  // Tiers available on this date. Empty/undefined = all tiers of the experience.
+  tier_ids?: string[];
 }
 
 export interface TicketTier {
