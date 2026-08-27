@@ -13,8 +13,15 @@ export function formatUSD(value: number): string {
   }).format(value);
 }
 
-export function uid(prefix = "id"): string {
-  return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+// UUIDs so ids are valid Postgres/Supabase primary keys. The prefix arg is kept
+// for call-site readability but no longer used.
+export function uid(_prefix = "id"): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  // fallback
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
 }
 
 const DAYS_ES = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];

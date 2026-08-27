@@ -1,6 +1,7 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Landing from "@/pages/Landing";
+import { initAuth } from "@/lib/auth";
 
 // Code-split heavier routes so the landing loads with a minimal bundle.
 const Auth = lazy(() => import("@/pages/Auth"));
@@ -16,6 +17,7 @@ function RouteFallback() {
 }
 
 export default function App() {
+  useEffect(() => initAuth(), []);
   return (
     <BrowserRouter>
       <Suspense fallback={<RouteFallback />}>

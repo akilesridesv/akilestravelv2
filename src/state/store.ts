@@ -7,6 +7,10 @@ import type {
   ProviderProfile,
 } from "@/types/domain";
 import { uid } from "@/lib/utils";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import * as repo from "@/data/repo";
+
+const remote = isSupabaseConfigured;
 
 export interface LocalUser {
   id: string;
@@ -18,13 +22,21 @@ interface AppState {
   // auth
   user: LocalUser | null;
   provider: ProviderProfile | null;
+  authReady: boolean; // false while restoring a Supabase session
   // domain
   experiences: Experience[];
   bookings: Booking[];
 
-  // auth actions (local mock; swap for Supabase Auth when configured)
+  // auth actions (local mock; Supabase Auth wires in via setSession)
   signIn: (email: string, name?: string) => void;
   signOut: () => void;
+  setSession: (
+    user: LocalUser,
+    provider: ProviderProfile,
+    experiences: Experience[],
+    bookings: Booking[]
+  ) => void;
+  setAuthReady: () => void;
 
   // provider actions
   publishDraft: (draft: ExperienceDraft) => Experience;
@@ -90,6 +102,7 @@ export const useApp = create<AppState>()(
     (set, get) => ({
       user: null,
       provider: null,
+      authReady: !remote, // local mode is ready immediately
       experiences: [],
       bookings: [],
 
@@ -101,10 +114,15 @@ export const useApp = create<AppState>()(
             : { id: uid("usr"), email, name: name || email.split("@")[0] };
         const provider = get().provider ?? makeProvider(user);
         const bookings = get().bookings.length ? get().bookings : seedBookings();
-        set({ user, provider, bookings });
+        set({ user, provider, bookings, authReady: true });
       },
 
-      signOut: () => set({ user: null }),
+      signOut: () => set({ user: null, provider: null, experiences: [], bookings: [] }),
+
+      setSession: (user, provider, experiences, bookings) =>
+        set({ user, provider, experiences, bookings, authReady: true }),
+
+      setAuthReady: () => set({ authReady: true }),
 
       publishDraft: (draft) => {
         const provider = get().provider;
@@ -120,25 +138,34 @@ export const useApp = create<AppState>()(
           updated_at: now,
         };
         set({ experiences: [exp, ...get().experiences] });
+        if (remote) void repo.saveExperience(exp, provider?.id).catch(console.error);
         return exp;
       },
 
-      updateExperience: (id, patch) =>
-        set({
-          experiences: get().experiences.map((e) =>
-            e.id === id ? { ...e, ...patch, updated_at: new Date().toISOString() } : e
-          ),
-        }),
+      updateExperience: (id, patch) => {
+        const next = get().experiences.map((e) =>
+          e.id === id ? { ...e, ...patch, updated_at: new Date().toISOString() } : e
+        );
+        set({ experiences: next });
+        if (remote) {
+          const updated = next.find((e) => e.id === id);
+          if (updated) void repo.saveExperience(updated, get().provider?.id).catch(console.error);
+        }
+      },
 
-      removeExperience: (id) =>
-        set({ experiences: get().experiences.filter((e) => e.id !== id) }),
+      removeExperience: (id) => {
+        set({ experiences: get().experiences.filter((e) => e.id !== id) });
+        if (remote) void repo.deleteExperience(id).catch(console.error);
+      },
 
-      setBookingStatus: (id, status) =>
+      setBookingStatus: (id, status) => {
         set({
           bookings: get().bookings.map((b) =>
             b.id === id ? { ...b, booking_status: status } : b
           ),
-        }),
+        });
+        if (remote) void repo.updateBookingStatus(id, status).catch(console.error);
+      },
     }),
     { name: "akiles-travel-v2" }
   )

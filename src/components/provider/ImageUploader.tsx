@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { processImageFile, ImageError } from "@/lib/imageProcess";
-import { putImage, deleteImage } from "@/lib/imageStore";
+import { putImage, putImageRemote, deleteImage } from "@/lib/imageStore";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import { useImageSrc } from "@/hooks/useImageSrc";
 import { cn } from "@/lib/utils";
 import { ImagePlus, X, ChevronLeft, ChevronRight, Star, Loader2 } from "lucide-react";
@@ -37,7 +38,7 @@ export function ImageUploader({
         }
         try {
           const { blob } = await processImageFile(file);
-          refs.push(await putImage(blob));
+          refs.push(isSupabaseConfigured ? await putImageRemote(blob) : await putImage(blob));
         } catch (e) {
           setError(e instanceof ImageError ? e.message : "No se pudo subir la imagen.");
         }

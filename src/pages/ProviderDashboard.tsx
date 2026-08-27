@@ -2,6 +2,7 @@ import * as React from "react";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/state/store";
+import { authSignOut } from "@/lib/auth";
 import { useIsDesktop } from "@/hooks/useMediaQuery";
 import { CopilotSurface } from "@/components/copilot/CopilotSurface";
 import {
@@ -36,12 +37,19 @@ export default function ProviderDashboard() {
   const navigate = useNavigate();
   const user = useApp((s) => s.user);
   const provider = useApp((s) => s.provider);
-  const signOut = useApp((s) => s.signOut);
+  const authReady = useApp((s) => s.authReady);
   const isDesktop = useIsDesktop();
   const [activePanel, setActivePanel] = useState<Panel>("experiences");
   const [page, setPage] = useState<0 | 1>(0); // mobile pager: 0 = chat, 1 = panel
   const pagerRef = useRef<HTMLDivElement>(null);
 
+  if (!authReady) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-background">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
   if (!user) {
     navigate("/auth");
     return null;
@@ -105,8 +113,8 @@ export default function ProviderDashboard() {
           </div>
         </div>
         <button
-          onClick={() => {
-            signOut();
+          onClick={async () => {
+            await authSignOut();
             navigate("/");
           }}
           className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground hover:bg-accent"

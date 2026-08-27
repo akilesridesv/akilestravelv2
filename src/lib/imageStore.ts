@@ -4,6 +4,27 @@
 // refs become real URLs and `resolveImageSrc` returns them unchanged.
 
 import { uid } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
+
+const BUCKET = "experience-images";
+
+/** Upload a processed image to Supabase Storage; returns its public URL. */
+export async function putImageRemote(blob: Blob): Promise<string> {
+  const path = `${uid()}.jpg`;
+  const { error } = await supabase!.storage
+    .from(BUCKET)
+    .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+  if (error) throw error;
+  return supabase!.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+async function deleteRemote(url: string): Promise<void> {
+  const marker = `/${BUCKET}/`;
+  const i = url.indexOf(marker);
+  if (i < 0) return;
+  const path = url.slice(i + marker.length);
+  await supabase!.storage.from(BUCKET).remove([path]);
+}
 
 const DB_NAME = "akiles-media";
 const STORE = "images";
@@ -58,7 +79,10 @@ export async function resolveImageSrc(ref: string): Promise<string | undefined> 
 
 /** Delete a stored image and free its cached object URL. */
 export async function deleteImage(ref: string): Promise<void> {
-  if (!isImageRef(ref)) return;
+  if (!isImageRef(ref)) {
+    if (supabase && ref.includes(`/${BUCKET}/`)) await deleteRemote(ref).catch(() => {});
+    return;
+  }
   const cached = urlCache.get(ref);
   if (cached) {
     URL.revokeObjectURL(cached);

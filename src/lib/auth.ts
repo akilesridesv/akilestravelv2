@@ -1,0 +1,93 @@
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { useApp, type LocalUser } from "@/state/store";
+import { ensureProviderProfile, loadExperiences, loadBookings } from "@/data/repo";
+
+export interface AuthResult {
+  error?: string;
+  needsConfirm?: boolean;
+}
+
+function sessionUser(u: { id: string; email?: string; user_metadata?: any }): LocalUser {
+  return {
+    id: u.id,
+    email: u.email ?? "",
+    name: u.user_metadata?.name ?? (u.email ? u.email.split("@")[0] : "Proveedor"),
+  };
+}
+
+/** Load the provider's profile + data into the store after auth. */
+export async function bootstrapSession(user: LocalUser): Promise<void> {
+  const provider = await ensureProviderProfile(user.id, user.name);
+  const [experiences, bookings] = await Promise.all([loadExperiences(user.id), loadBookings()]);
+  useApp.getState().setSession(user, provider, experiences, bookings);
+}
+
+export async function authSignIn(email: string, password: string, name?: string): Promise<AuthResult> {
+  if (!isSupabaseConfigured || !supabase) {
+    useApp.getState().signIn(email, name);
+    return {};
+  }
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return { error: error.message };
+  const { data } = await supabase.auth.getUser();
+  if (data.user) await bootstrapSession(sessionUser(data.user));
+  return {};
+}
+
+export async function authSignUp(email: string, password: string, name: string): Promise<AuthResult> {
+  if (!isSupabaseConfigured || !supabase) {
+    useApp.getState().signIn(email, name);
+    return {};
+  }
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { name } },
+  });
+  if (error) return { error: error.message };
+  if (data.session && data.user) {
+    await bootstrapSession(sessionUser(data.user));
+    return {};
+  }
+  return { needsConfirm: true };
+}
+
+export async function authGoogle(): Promise<AuthResult> {
+  if (!supabase) return { error: "Configura Supabase para usar Google." };
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: window.location.origin + "/panel" },
+  });
+  return error ? { error: error.message } : {};
+}
+
+export async function authSignOut(): Promise<void> {
+  if (supabase) await supabase.auth.signOut();
+  useApp.getState().signOut();
+}
+
+/** On app start: restore an existing session and listen for auth changes. */
+export function initAuth(): () => void {
+  if (!isSupabaseConfigured || !supabase) return () => {};
+  const c = supabase;
+  c.auth.getSession().then(({ data }) => {
+    if (data.session?.user) {
+      bootstrapSession(sessionUser(data.session.user)).catch((e) => {
+        console.error(e);
+        useApp.getState().setAuthReady();
+      });
+    } else {
+      // No session in remote mode: drop any stale local user and require login.
+      useApp.getState().signOut();
+      useApp.getState().setAuthReady();
+    }
+  });
+  const { data: sub } = c.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_IN" && session?.user) {
+      bootstrapSession(sessionUser(session.user)).catch(console.error);
+    } else if (event === "SIGNED_OUT") {
+      useApp.getState().signOut();
+    }
+  });
+  return () => sub.subscription.unsubscribe();
+}
