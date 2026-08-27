@@ -14,6 +14,8 @@ import {
   resolveExperience,
 } from "@/ai/edits";
 import { bookingLink } from "@/lib/experience";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import * as repo from "@/data/repo";
 import type { ExperienceDraft } from "@/types/domain";
 import { ExperienceDraftEditor } from "@/components/provider/ExperienceDraftEditor";
 import { BookingsPanel, RevenuePanel, ExperiencesPanel } from "@/components/provider/panels";
@@ -67,13 +69,36 @@ export function CopilotSurface({
   const bookings = useApp((s) => s.bookings);
   const updateExperience = useApp((s) => s.updateExperience);
   const setBookingStatus = useApp((s) => s.setBookingStatus);
+  const user = useApp((s) => s.user);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
 
+  // Load persisted chat history for this provider (Supabase).
+  useEffect(() => {
+    if (!isSupabaseConfigured || !user) return;
+    let alive = true;
+    repo
+      .loadMessages(user.id)
+      .then((rows) => {
+        if (alive && rows.length)
+          setMessages(rows.map((r) => ({ id: r.id, role: r.role, blocks: r.blocks as Block[] })));
+      })
+      .catch(console.error);
+    return () => {
+      alive = false;
+    };
+  }, [user?.id]);
+
   function push(role: Message["role"], blocks: Block[]) {
-    setMessages((m) => [...m, { id: uid("msg"), role, blocks }]);
+    const msg: Message = { id: uid("msg"), role, blocks };
+    setMessages((m) => [...m, msg]);
+    if (isSupabaseConfigured && user) {
+      void repo
+        .saveMessage({ id: msg.id, user_id: user.id, role, blocks: blocks as unknown[] })
+        .catch(console.error);
+    }
   }
 
   async function handleSend(text: string) {

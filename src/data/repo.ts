@@ -259,3 +259,29 @@ export async function updateBookingStatus(id: string, status: Booking["booking_s
   const { error } = await sb().from("bookings").update({ booking_status: status }).eq("id", id);
   if (error) throw error;
 }
+
+// --- copilot chat history ---------------------------------------------------
+
+export interface StoredMessage {
+  id: string;
+  role: "user" | "assistant";
+  blocks: unknown[];
+}
+
+export async function loadMessages(userId: string): Promise<StoredMessage[]> {
+  const { data, error } = await sb()
+    .from("copilot_messages")
+    .select("id, role, blocks")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ id: r.id, role: r.role, blocks: r.blocks ?? [] }));
+}
+
+export async function saveMessage(m: StoredMessage & { user_id: string }): Promise<void> {
+  const { error } = await sb()
+    .from("copilot_messages")
+    .insert({ id: m.id, user_id: m.user_id, role: m.role, blocks: m.blocks });
+  if (error) throw error;
+}
+
