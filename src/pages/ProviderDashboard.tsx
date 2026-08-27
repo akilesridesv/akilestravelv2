@@ -1,7 +1,8 @@
 import * as React from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/state/store";
+import { useIsDesktop } from "@/hooks/useMediaQuery";
 import { CopilotSurface } from "@/components/copilot/CopilotSurface";
 import {
   ExperiencesPanel,
@@ -23,7 +24,6 @@ import {
 } from "lucide-react";
 
 type Panel = "experiences" | "calendar" | "bookings" | "revenue";
-type View = "copilot" | Panel;
 
 const PANEL_TABS: { key: Panel; label: string; icon: React.ReactNode }[] = [
   { key: "experiences", label: "Experiencias", icon: <LayoutGrid className="h-4 w-4" /> },
@@ -37,14 +37,34 @@ export default function ProviderDashboard() {
   const user = useApp((s) => s.user);
   const provider = useApp((s) => s.provider);
   const signOut = useApp((s) => s.signOut);
-  const [view, setView] = useState<View>("copilot");
+  const isDesktop = useIsDesktop();
+  const [activePanel, setActivePanel] = useState<Panel>("experiences");
+  const [page, setPage] = useState<0 | 1>(0); // mobile pager: 0 = chat, 1 = panel
+  const pagerRef = useRef<HTMLDivElement>(null);
 
   if (!user) {
     navigate("/auth");
     return null;
   }
 
-  const activePanel: Panel = view === "copilot" ? "experiences" : view;
+  function scrollToPage(i: 0 | 1) {
+    const el = pagerRef.current;
+    if (el) el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+    setPage(i);
+  }
+
+  // Open a panel: on desktop just swap the right pane; on mobile slide to it.
+  function goToPanel(p: Panel) {
+    setActivePanel(p);
+    if (!isDesktop) scrollToPage(1);
+  }
+
+  function onPagerScroll() {
+    const el = pagerRef.current;
+    if (!el) return;
+    const p = Math.round(el.scrollLeft / el.clientWidth) as 0 | 1;
+    if (p !== page) setPage(p);
+  }
 
   function renderPanel(p: Panel) {
     switch (p) {
@@ -58,6 +78,8 @@ export default function ProviderDashboard() {
         return <RevenuePanel />;
     }
   }
+
+  const copilot = <CopilotSurface onNavigate={(t) => goToPanel(t as Panel)} context={activePanel} />;
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-background">
@@ -93,66 +115,65 @@ export default function ProviderDashboard() {
         </button>
       </header>
 
-      {/* Body: split (chat left, panel right) from ~900px; single view below */}
-      <div className="flex min-h-0 flex-1 flex-col min-[900px]:grid min-[900px]:grid-cols-[1.15fr_0.85fr]">
-        {/* Copilot */}
-        <section
-          className={cn(
-            "min-h-0 flex-1 flex-col",
-            view === "copilot" ? "flex" : "hidden",
-            "min-[900px]:flex"
-          )}
-        >
-          <CopilotSurface onNavigate={(t) => setView(t as View)} context={activePanel} />
-        </section>
-
-        {/* Context panels */}
-        <aside
-          className={cn(
-            "min-h-0 flex-1 flex-col border-l border-border bg-secondary/40",
-            view !== "copilot" ? "flex" : "hidden",
-            "min-[900px]:flex"
-          )}
-        >
-          {/* Panel tabs live here only on desktop; on mobile the bottom nav switches panels */}
-          <div className="no-scrollbar hidden gap-1 overflow-x-auto border-b border-border px-3 py-2 min-[900px]:flex">
-            {PANEL_TABS.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setView(t.key)}
-                className={cn(
-                  "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition",
-                  activePanel === t.key
-                    ? "bg-ink text-background"
-                    : "text-muted-foreground hover:bg-accent"
-                )}
-              >
-                {t.icon} {t.label}
-              </button>
-            ))}
+      {isDesktop ? (
+        /* Desktop: chat left, panel right */
+        <div className="grid min-h-0 flex-1 grid-cols-[1.15fr_0.85fr]">
+          <section className="flex min-h-0 flex-col">{copilot}</section>
+          <aside className="flex min-h-0 flex-col border-l border-border bg-secondary/40">
+            <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-border px-3 py-2">
+              {PANEL_TABS.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setActivePanel(t.key)}
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition",
+                    activePanel === t.key ? "bg-ink text-background" : "text-muted-foreground hover:bg-accent"
+                  )}
+                >
+                  {t.icon} {t.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">{renderPanel(activePanel)}</div>
+          </aside>
+        </div>
+      ) : (
+        /* Mobile: swipe between chat (left) and the dashboard panel (right) */
+        <>
+          <div
+            ref={pagerRef}
+            onScroll={onPagerScroll}
+            className="no-scrollbar flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden"
+            style={{ scrollbarWidth: "none" }}
+          >
+            <section className="flex min-h-0 w-full shrink-0 snap-start flex-col overflow-hidden">
+              {copilot}
+            </section>
+            <section className="flex min-h-0 w-full shrink-0 snap-start flex-col overflow-hidden bg-secondary/40">
+              <div className="flex-1 overflow-y-auto p-4">{renderPanel(activePanel)}</div>
+            </section>
           </div>
-          <div className="flex-1 overflow-y-auto p-4">{renderPanel(activePanel)}</div>
-        </aside>
-      </div>
 
-      {/* Mobile bottom nav (hidden once the split view kicks in) */}
-      <nav className="safe-b grid shrink-0 grid-cols-5 border-t border-border bg-background min-[900px]:hidden">
-        <MobileTab
-          label="Copiloto"
-          icon={<MessageSquare className="h-5 w-5" />}
-          active={view === "copilot"}
-          onClick={() => setView("copilot")}
-        />
-        {PANEL_TABS.map((t) => (
-          <MobileTab
-            key={t.key}
-            label={t.label}
-            icon={t.icon}
-            active={view === t.key}
-            onClick={() => setView(t.key)}
-          />
-        ))}
-      </nav>
+          {/* Bottom nav: Chat + the panels */}
+          <nav className="safe-b grid shrink-0 grid-cols-5 border-t border-border bg-background">
+            <MobileTab
+              label="Chat"
+              icon={<MessageSquare className="h-5 w-5" />}
+              active={page === 0}
+              onClick={() => scrollToPage(0)}
+            />
+            {PANEL_TABS.map((t) => (
+              <MobileTab
+                key={t.key}
+                label={t.label}
+                icon={t.icon}
+                active={page === 1 && activePanel === t.key}
+                onClick={() => goToPanel(t.key)}
+              />
+            ))}
+          </nav>
+        </>
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { ExperienceImage } from "@/components/provider/ExperienceImage";
 import { ScheduleEditor } from "@/components/provider/ScheduleEditor";
 import { WeekAgenda } from "@/components/provider/WeekAgenda";
 import { ViewToggle, type PanelView } from "@/components/provider/ViewToggle";
+import { Modal } from "@/components/ui/modal";
 import { deleteImages } from "@/lib/imageStore";
 import { blankDraft, experienceToDraft } from "@/lib/experience";
 import { formatUSD, dayName, uid, cn } from "@/lib/utils";
@@ -26,7 +27,7 @@ import {
   Pencil,
   Trash2,
   Plus,
-  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
@@ -174,6 +175,7 @@ export function ExperiencesPanel() {
 export function BookingsPanel({ compact = false }: { compact?: boolean }) {
   const bookings = useApp((s) => s.bookings);
   const setStatus = useApp((s) => s.setBookingStatus);
+  const [modalId, setModalId] = useState<string | null>(null);
 
   if (!bookings.length)
     return (
@@ -188,35 +190,97 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
   const sorted = [...bookings].sort(
     (a, b) => order.indexOf(a.booking_status) - order.indexOf(b.booking_status)
   );
+  const active = bookings.find((b) => b.id === modalId) ?? null;
 
   return (
     <div className="grid grid-cols-1 gap-3">
       {sorted.map((b) => (
-        <Card key={b.id} className="p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="truncate font-medium">{b.contact_name}</h3>
-                <BookingBadge status={b.booking_status} />
-              </div>
-              <p className="mt-0.5 truncate text-sm text-muted-foreground">{b.experience_title}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {b.number_of_people} pers · {b.scheduled_date} {b.scheduled_time} · {formatUSD(b.total_paid)}
-              </p>
+        <button
+          key={b.id}
+          type="button"
+          onClick={() => setModalId(b.id)}
+          className="flex w-full items-start gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:bg-accent"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="truncate font-medium">{b.contact_name}</h3>
+              <BookingBadge status={b.booking_status} />
             </div>
+            <p className="mt-0.5 truncate text-sm text-muted-foreground">{b.experience_title}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {b.number_of_people} pers · {b.scheduled_date} {b.scheduled_time} · {formatUSD(b.total_paid)}
+            </p>
           </div>
-          {!compact && b.booking_status === "pending_approval" && (
-            <div className="mt-3 flex gap-2">
-              <Button size="sm" onClick={() => setStatus(b.id, "confirmed")}>
-                <Check className="h-4 w-4" /> Aprobar y cobrar {formatUSD(b.total_paid)}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setStatus(b.id, "rejected")}>
-                <X className="h-4 w-4" /> Rechazar
-              </Button>
-            </div>
-          )}
-        </Card>
+          <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+        </button>
       ))}
+
+      <Modal
+        open={!!active}
+        onClose={() => setModalId(null)}
+        title={active ? `Reserva de ${active.contact_name}` : ""}
+      >
+        {active && (
+          <BookingDetail
+            booking={active}
+            readOnly={compact}
+            onApprove={() => {
+              setStatus(active.id, "confirmed");
+              setModalId(null);
+            }}
+            onReject={() => {
+              setStatus(active.id, "rejected");
+              setModalId(null);
+            }}
+          />
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+function BookingDetail({
+  booking: b,
+  readOnly,
+  onApprove,
+  onReject,
+}: {
+  booking: Booking;
+  readOnly?: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  const row = (label: string, value: React.ReactNode) => (
+    <div className="flex items-baseline justify-between gap-3 border-b border-border py-2 last:border-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-right text-sm font-medium">{value}</span>
+    </div>
+  );
+  return (
+    <div className="grid gap-3">
+      <div className="flex items-center gap-2">
+        <BookingBadge status={b.booking_status} />
+        <span className="text-sm text-muted-foreground">Código {b.confirmation_code}</span>
+      </div>
+      <div>
+        {row("Experiencia", b.experience_title)}
+        {row("Correo", b.contact_email)}
+        {row("Personas", b.number_of_people)}
+        {row("Fecha", `${b.scheduled_date} · ${b.scheduled_time}`)}
+        {row("Subtotal", formatUSD(b.subtotal_paid))}
+        {row("Service fee", formatUSD(b.service_fee_paid))}
+        {row("Total", formatUSD(b.total_paid))}
+      </div>
+      {!readOnly && b.booking_status === "pending_approval" && (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button className="sm:flex-1" onClick={onApprove}>
+            <Check className="h-4 w-4" /> Aprobar y cobrar {formatUSD(b.total_paid)}
+          </Button>
+          <Button variant="outline" onClick={onReject}>
+            <X className="h-4 w-4" /> Rechazar
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -275,9 +339,7 @@ export function CalendarPanel() {
   const experiences = useApp((s) => s.experiences);
   const updateExperience = useApp((s) => s.updateExperience);
   const [view, setView] = useState<PanelView>("list");
-  const [openId, setOpenId] = useState<string | null>(
-    experiences.length === 1 ? experiences[0].id : null
-  );
+  const [modalId, setModalId] = useState<string | null>(null);
 
   if (!experiences.length)
     return (
@@ -288,6 +350,8 @@ export function CalendarPanel() {
       />
     );
 
+  const modalExp = experiences.find((e) => e.id === modalId) ?? null;
+
   return (
     <div className="grid grid-cols-1 gap-3">
       <div className="flex items-center justify-end">
@@ -297,49 +361,43 @@ export function CalendarPanel() {
       {view === "calendar" ? (
         <WeekAgenda experiences={experiences} />
       ) : (
-        // List view: an accordion — select an experience to expand its horarios.
+        // List view: tap a viñeta to open its horarios in a modal (view / modify).
         experiences.map((e) => {
-          const open = openId === e.id;
           const days = [...new Set(e.schedules.map((s) => s.day_of_week))]
             .sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b))
             .map((d) => dayName(d).slice(0, 3))
             .join(", ");
           return (
-            <Card key={e.id} className="overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setOpenId(open ? null : e.id)}
-                className="flex w-full items-center gap-3 p-4 text-left"
-              >
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate font-medium">{e.title}</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {e.schedules.length} salida{e.schedules.length === 1 ? "" : "s"}
-                    {e.schedules.length ? ` · ${days}` : " · sin salidas"}
-                  </p>
-                </div>
-                <ChevronDown
-                  className={cn(
-                    "h-5 w-5 shrink-0 text-muted-foreground transition-transform",
-                    open && "rotate-180"
-                  )}
-                />
-              </button>
-              {open && (
-                <div className="border-t border-border p-4">
-                  <ScheduleEditor
-                    value={e.schedules}
-                    onChange={(sch) => updateExperience(e.id, { schedules: sch })}
-                    tiers={e.tiers}
-                    durationHours={e.duration_hours}
-                    defaultCapacity={e.max_capacity}
-                  />
-                </div>
-              )}
-            </Card>
+            <button
+              key={e.id}
+              type="button"
+              onClick={() => setModalId(e.id)}
+              className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:bg-accent"
+            >
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate font-medium">{e.title}</h3>
+                <p className="text-xs text-muted-foreground">
+                  {e.schedules.length} salida{e.schedules.length === 1 ? "" : "s"}
+                  {e.schedules.length ? ` · ${days}` : " · sin salidas"}
+                </p>
+              </div>
+              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+            </button>
           );
         })
       )}
+
+      <Modal open={!!modalExp} onClose={() => setModalId(null)} title={modalExp?.title ?? ""}>
+        {modalExp && (
+          <ScheduleEditor
+            value={modalExp.schedules}
+            onChange={(sch) => updateExperience(modalExp.id, { schedules: sch })}
+            tiers={modalExp.tiers}
+            durationHours={modalExp.duration_hours}
+            defaultCapacity={modalExp.max_capacity}
+          />
+        )}
+      </Modal>
     </div>
   );
 }
