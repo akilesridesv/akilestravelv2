@@ -6,6 +6,7 @@ import { classifyIntent } from "@/ai/intent";
 import {
   parseBookingAction,
   parseCalendarCommand,
+  parseDateSlotCommand,
   parseExperienceEdits,
   parseDeadlineHours,
   parseTierCommand,
@@ -122,6 +123,16 @@ export function CopilotSurface({
             push("assistant", [
               { type: "text", text: "Primero crea una experiencia; luego puedo abrir o bloquear sus salidas." },
             ]);
+            break;
+          }
+          // Concrete-date command (Airbnb calendar) takes priority when present.
+          const dateRes = parseDateSlotCommand(value, exp);
+          if (dateRes) {
+            updateExperience(exp.id, { date_slots: dateRes.date_slots });
+            push("assistant", [
+              { type: "text", text: `En “${exp.title}”, ${dateRes.change}.` },
+            ]);
+            onNavigate?.("calendar");
             break;
           }
           const { schedules, changes } = parseCalendarCommand(value, exp);

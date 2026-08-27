@@ -1,5 +1,5 @@
-import type { Booking, Experience, RecurringSchedule, TicketTier } from "@/types/domain";
-import { uid } from "@/lib/utils";
+import type { Booking, DateSlot, Experience, RecurringSchedule, TicketTier } from "@/types/domain";
+import { uid, monthName } from "@/lib/utils";
 import { addHours, DAY_ABBR, parseDaysFromText, parseMoney, parseTimeToken, stripAccents } from "@/ai/nlp";
 
 // --------------------------------------------------------------------------
@@ -152,6 +152,85 @@ export function parseCalendarCommand(text: string, exp: Experience): CalendarEdi
 
   schedules.sort((a, b) => a.day_of_week - b.day_of_week);
   return { schedules, changes };
+}
+
+// --------------------------------------------------------------------------
+// Concrete dates by chat (Airbnb-style calendar):
+// "habilita el 5, 8 y 12 de septiembre", "bloquea del 10 al 20 de septiembre"
+// --------------------------------------------------------------------------
+
+const MONTHS: Record<string, number> = {
+  enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
+  julio: 6, agosto: 7, septiembre: 8, setiembre: 8, octubre: 9, noviembre: 10, diciembre: 11,
+};
+
+export interface DateSlotEdit {
+  date_slots: DateSlot[];
+  change: string;
+}
+
+export function parseDateSlotCommand(text: string, exp: Experience): DateSlotEdit | null {
+  const low = stripAccents(text.toLowerCase());
+
+  let month = -1;
+  for (const [name, idx] of Object.entries(MONTHS)) {
+    if (low.includes(name)) {
+      month = idx;
+      break;
+    }
+  }
+  const rangeM = low.match(/del?\s+(\d{1,2})\s+(?:al|a|hasta)\s+(\d{1,2})/);
+  if (month < 0 && !rangeM) return null; // not a concrete-date command
+
+  let days: number[] = [];
+  if (rangeM) {
+    const a = parseInt(rangeM[1], 10);
+    const b = parseInt(rangeM[2], 10);
+    for (let d = Math.min(a, b); d <= Math.max(a, b); d++) days.push(d);
+  } else {
+    // numbers in the clause before "de <month>", minus time / capacity noise
+    const monthName2 = Object.keys(MONTHS).find((n) => low.includes(n))!;
+    const cut = low.indexOf("de " + monthName2);
+    let clause = cut >= 0 ? low.slice(0, cut) : low.slice(0, low.indexOf(monthName2));
+    clause = clause.replace(/\d{1,2}(?::\d{2})?\s*(?:am|pm)/g, "").replace(/(?:cupo|capacidad)\s*\d+/g, "");
+    const nums = clause.match(/\b(\d{1,2})\b/g) ?? [];
+    days = [...new Set(nums.map(Number).filter((n) => n >= 1 && n <= 31))];
+  }
+  if (!days.length) return null;
+
+  if (month < 0) month = new Date().getMonth();
+  const now = new Date();
+  const year = month < now.getMonth() ? now.getFullYear() + 1 : now.getFullYear();
+
+  const isRemove = /(quita|quitar|elimina|eliminar|borra|borrar|bloquea|bloquear|cierra|cerrar|deshabilita|remueve|remover)/.test(low);
+  const time = parseTimeToken(text) ?? exp.schedules[0]?.start_time ?? "09:00";
+  const capM = low.match(/(?:cupo|capacidad)\s*(\d+)/);
+  const capacity = capM ? parseInt(capM[1], 10) : exp.max_capacity || 10;
+
+  const dateStrs = days.map(
+    (d) => `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`
+  );
+  let next = (exp.date_slots ?? []).map((s) => ({ ...s }));
+  if (isRemove) {
+    next = next.filter((s) => !dateStrs.includes(s.slot_date));
+  } else {
+    for (const ds of dateStrs) {
+      const existing = next.find((s) => s.slot_date === ds);
+      const end = addHours(time, exp.duration_hours);
+      if (existing) {
+        existing.start_time = time;
+        existing.end_time = end;
+        existing.capacity = capacity;
+        existing.status = "open";
+      } else {
+        next.push({ id: uid("ds"), slot_date: ds, start_time: time, end_time: end, capacity, status: "open" });
+      }
+    }
+  }
+  return {
+    date_slots: next,
+    change: `${isRemove ? "quité" : "habilité"} ${days.length} fecha${days.length === 1 ? "" : "s"} de ${monthName(month)}`,
+  };
 }
 
 // --------------------------------------------------------------------------

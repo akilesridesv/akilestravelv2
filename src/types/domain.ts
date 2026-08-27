@@ -60,6 +60,17 @@ export interface AvailabilitySlot {
   origin: "recurrente" | "manual";
 }
 
+// A concrete calendar date the provider enabled/blocked from the date calendar
+// (Airbnb-style), layered on top of the weekly recurring pattern.
+export interface DateSlot {
+  id: string;
+  slot_date: string; // "2026-09-05"
+  start_time: string; // "09:00"
+  end_time?: string;
+  capacity: number;
+  status: "open" | "blocked";
+}
+
 export interface TicketTier {
   id: string;
   tier_name: string; // "Entrada regular", "Entrada VIP"
@@ -101,6 +112,7 @@ export interface Experience {
   registration_deadline_hours: number;
   event_date?: string; // only for listing_type === "event"
   schedules: RecurringSchedule[];
+  date_slots?: DateSlot[]; // concrete per-date availability (date calendar)
   tiers: TicketTier[];
   created_at: string;
   updated_at: string;

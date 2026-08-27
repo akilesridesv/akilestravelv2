@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input";
 import { ExperienceDraftEditor } from "@/components/provider/ExperienceDraftEditor";
 import { ExperienceImage } from "@/components/provider/ExperienceImage";
 import { ScheduleEditor } from "@/components/provider/ScheduleEditor";
-import { WeekAgenda } from "@/components/provider/WeekAgenda";
-import { ViewToggle, type PanelView } from "@/components/provider/ViewToggle";
+import { WeekAgenda, TodayAgenda } from "@/components/provider/WeekAgenda";
+import { DateCalendar } from "@/components/provider/DateCalendar";
 import { Modal } from "@/components/ui/modal";
 import { deleteImages } from "@/lib/imageStore";
 import { blankDraft, experienceToDraft, displayPrice, bookingLink } from "@/lib/experience";
@@ -367,97 +367,84 @@ export function RevenuePanel() {
 
 // --------------------------------------------------------------------------
 
-function FilterChip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "max-w-[170px] truncate rounded-full px-3 py-1.5 text-sm transition",
-        active ? "bg-ink text-background" : "border border-border text-muted-foreground hover:bg-accent"
-      )}
-    >
-      {children}
-    </button>
-  );
-}
+type CalRange = "today" | "week" | "month";
+
+const RANGE_TABS: { k: CalRange; label: string }[] = [
+  { k: "today", label: "Hoy" },
+  { k: "week", label: "Semana" },
+  { k: "month", label: "Mes" },
+];
 
 export function CalendarPanel() {
   const experiences = useApp((s) => s.experiences);
   const updateExperience = useApp((s) => s.updateExperience);
-  const [view, setView] = useState<PanelView>("list");
+  const [range, setRange] = useState<CalRange>("week");
+  const [filterId, setFilterId] = useState<string>(""); // "" = all
   const [modalId, setModalId] = useState<string | null>(null);
-  const [filterId, setFilterId] = useState<string | null>(null);
 
   if (!experiences.length)
     return (
       <EmptyState
         icon={<CalendarDays className="h-8 w-8" />}
         title="Sin experiencias"
-        hint="Crea una experiencia primero; aquí gestionas sus horarios de salida (varios por día). También por chat: “abre los sábados a las 2pm cupo 10”."
+        hint="Crea una experiencia primero; aquí gestionas sus horarios y fechas. También por chat: “abre los sábados 2pm cupo 10”, “habilita el 5, 8 y 12 de septiembre”."
       />
     );
 
   const modalExp = experiences.find((e) => e.id === modalId) ?? null;
-  const agendaExps =
-    filterId ? experiences.filter((e) => e.id === filterId) : experiences;
+  const selectedExp = filterId ? experiences.find((e) => e.id === filterId) ?? null : null;
+  const shown = selectedExp ? [selectedExp] : experiences;
 
   return (
     <div className="grid grid-cols-1 gap-3">
-      <div className="flex items-center justify-end">
-        <ViewToggle value={view} onChange={setView} />
+      {/* Controls: experience selector + range toggle */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <select
+          value={filterId}
+          onChange={(e) => setFilterId(e.target.value)}
+          className="h-9 max-w-[60%] rounded-xl border border-input bg-card px-3 text-sm"
+        >
+          <option value="">Todas las experiencias</option>
+          {experiences.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.title}
+            </option>
+          ))}
+        </select>
+        <div className="inline-flex rounded-full border border-border p-0.5">
+          {RANGE_TABS.map((t) => (
+            <button
+              key={t.k}
+              type="button"
+              onClick={() => setRange(t.k)}
+              className={cn(
+                "rounded-full px-3 py-1.5 text-sm transition",
+                range === t.k ? "bg-ink text-background" : "text-muted-foreground hover:bg-accent"
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {view === "calendar" ? (
-        <>
-          {experiences.length > 1 && (
-            <div className="flex flex-wrap gap-1.5">
-              <FilterChip active={!filterId} onClick={() => setFilterId(null)}>
-                Todas
-              </FilterChip>
-              {experiences.map((e) => (
-                <FilterChip key={e.id} active={filterId === e.id} onClick={() => setFilterId(e.id)}>
-                  {e.title}
-                </FilterChip>
-              ))}
-            </div>
-          )}
-          <WeekAgenda experiences={agendaExps} onSelect={setModalId} />
-        </>
-      ) : (
-        // List view: tap a viñeta to open its horarios in a modal (view / modify).
-        experiences.map((e) => {
-          const days = [...new Set(e.schedules.map((s) => s.day_of_week))]
-            .sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b))
-            .map((d) => dayName(d).slice(0, 3))
-            .join(", ");
-          return (
-            <button
-              key={e.id}
-              type="button"
-              onClick={() => setModalId(e.id)}
-              className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:bg-accent"
-            >
-              <div className="min-w-0 flex-1">
-                <h3 className="truncate font-medium">{e.title}</h3>
-                <p className="text-xs text-muted-foreground">
-                  {e.schedules.length} salida{e.schedules.length === 1 ? "" : "s"}
-                  {e.schedules.length ? ` · ${days}` : " · sin salidas"}
-                </p>
-              </div>
-              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-            </button>
-          );
-        })
-      )}
+      {range === "today" && <TodayAgenda experiences={shown} onSelect={setModalId} />}
+      {range === "week" && <WeekAgenda experiences={shown} onSelect={setModalId} />}
+      {range === "month" &&
+        (selectedExp ? (
+          <DateCalendar
+            experience={selectedExp}
+            onChange={(ds) => updateExperience(selectedExp.id, { date_slots: ds })}
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border px-6 py-10 text-center">
+            <CalendarDays className="mb-3 h-8 w-8 text-muted-foreground" />
+            <p className="font-medium">Elige una experiencia</p>
+            <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+              Selecciona una experiencia arriba para agregar o quitar fechas por día (arrastrando).
+            </p>
+          </div>
+        ))}
 
       <Modal open={!!modalExp} onClose={() => setModalId(null)} title={modalExp?.title ?? ""}>
         {modalExp && (
