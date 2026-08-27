@@ -62,7 +62,6 @@ export function ExperiencesPanel() {
   const removeExperience = useApp((s) => s.removeExperience);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [view, setView] = useState<PanelView>("list");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   async function share(e: Experience) {
@@ -106,18 +105,17 @@ export function ExperiencesPanel() {
 
   return (
     <div className="grid grid-cols-1 gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
-          <Plus className="h-4 w-4" /> Nueva
-        </Button>
-        <ViewToggle value={view} onChange={setView} />
-      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="justify-self-start"
+        onClick={() => setCreating(true)}
+      >
+        <Plus className="h-4 w-4" /> Nueva experiencia
+      </Button>
 
-      {view === "calendar" ? (
-        <WeekAgenda experiences={experiences} />
-      ) : (
-        experiences.map((e) =>
-          editingId === e.id ? (
+      {experiences.map((e) =>
+        editingId === e.id ? (
           <ExperienceDraftEditor
             key={e.id}
             initial={experienceToDraft(e)}
@@ -199,8 +197,7 @@ export function ExperiencesPanel() {
             </div>
           </Card>
           )
-        )
-      )}
+        )}
     </div>
   );
 }
@@ -370,11 +367,35 @@ export function RevenuePanel() {
 
 // --------------------------------------------------------------------------
 
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "max-w-[170px] truncate rounded-full px-3 py-1.5 text-sm transition",
+        active ? "bg-ink text-background" : "border border-border text-muted-foreground hover:bg-accent"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function CalendarPanel() {
   const experiences = useApp((s) => s.experiences);
   const updateExperience = useApp((s) => s.updateExperience);
   const [view, setView] = useState<PanelView>("list");
   const [modalId, setModalId] = useState<string | null>(null);
+  const [filterId, setFilterId] = useState<string | null>(null);
 
   if (!experiences.length)
     return (
@@ -386,6 +407,8 @@ export function CalendarPanel() {
     );
 
   const modalExp = experiences.find((e) => e.id === modalId) ?? null;
+  const agendaExps =
+    filterId ? experiences.filter((e) => e.id === filterId) : experiences;
 
   return (
     <div className="grid grid-cols-1 gap-3">
@@ -394,7 +417,21 @@ export function CalendarPanel() {
       </div>
 
       {view === "calendar" ? (
-        <WeekAgenda experiences={experiences} onSelect={setModalId} />
+        <>
+          {experiences.length > 1 && (
+            <div className="flex flex-wrap gap-1.5">
+              <FilterChip active={!filterId} onClick={() => setFilterId(null)}>
+                Todas
+              </FilterChip>
+              {experiences.map((e) => (
+                <FilterChip key={e.id} active={filterId === e.id} onClick={() => setFilterId(e.id)}>
+                  {e.title}
+                </FilterChip>
+              ))}
+            </div>
+          )}
+          <WeekAgenda experiences={agendaExps} onSelect={setModalId} />
+        </>
       ) : (
         // List view: tap a viñeta to open its horarios in a modal (view / modify).
         experiences.map((e) => {
