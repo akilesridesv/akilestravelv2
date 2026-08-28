@@ -1,7 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { useProviderPublic } from "@/hooks/usePublicData";
 import { ExperienceCard } from "@/components/tourist/ExperienceCard";
-import { TouristHeader, TouristFooter } from "@/components/tourist/TouristChrome";
+import { TouristHeader, TouristFooter, BackLink } from "@/components/tourist/TouristChrome";
 import { Button } from "@/components/ui/button";
 import { useImageSrc } from "@/hooks/useImageSrc";
 import {
@@ -16,7 +16,6 @@ import {
   Music2,
   Languages,
   Sparkles,
-  ChevronLeft,
 } from "lucide-react";
 
 export default function ProviderPublic() {
@@ -52,12 +51,7 @@ export default function ProviderPublic() {
       <TouristHeader />
       <div className="relative">
         <Cover imageRef={provider.cover_url} />
-        <Link
-          to="/"
-          className="absolute left-4 top-4 inline-flex items-center gap-1 rounded-full bg-background/85 px-3 py-1.5 text-sm font-medium shadow-sm backdrop-blur transition hover:bg-background"
-        >
-          <ChevronLeft className="h-4 w-4" /> Explorar
-        </Link>
+        <BackLink className="absolute left-4 top-4" />
       </div>
 
       <main className="mx-auto max-w-5xl px-5 sm:px-8">

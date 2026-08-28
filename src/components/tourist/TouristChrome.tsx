@@ -1,5 +1,29 @@
 import { Link } from "react-router-dom";
-import { BadgeCheck } from "lucide-react";
+import { BadgeCheck, ChevronLeft } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+/** Consistent "back" pill used across tourist pages (bordered, subtle blur). */
+export function BackLink({
+  to = "/",
+  label = "Explorar",
+  className = "",
+}: {
+  to?: string;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <Link
+      to={to}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border border-border bg-background/85 px-3.5 py-1.5 text-sm font-medium shadow-sm backdrop-blur transition hover:bg-accent",
+        className
+      )}
+    >
+      <ChevronLeft className="h-4 w-4" /> {label}
+    </Link>
+  );
+}
 
 /** Minimal top bar for the tourist marketplace. */
 export function TouristHeader() {

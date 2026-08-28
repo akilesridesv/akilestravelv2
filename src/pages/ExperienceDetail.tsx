@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { usePublishedExperience } from "@/hooks/usePublicData";
 import { ExperienceImage } from "@/components/provider/ExperienceImage";
 import { BookingSheet } from "@/components/tourist/BookingSheet";
-import { TouristHeader } from "@/components/tourist/TouristChrome";
+import { TouristHeader, BackLink } from "@/components/tourist/TouristChrome";
 import { Button } from "@/components/ui/button";
 import { useImageSrc } from "@/hooks/useImageSrc";
 import { bookableDepartures, bookableDates } from "@/lib/availability";
@@ -71,12 +71,7 @@ export default function ExperienceDetail() {
       <TouristHeader />
 
       <main className="mx-auto max-w-5xl px-5 py-6 sm:px-8">
-        <Link
-          to="/"
-          className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ChevronLeft className="h-4 w-4" /> Explorar
-        </Link>
+        <BackLink className="mb-4" />
 
         <Gallery images={exp.image_urls} featured={exp.featured_image} title={exp.title} />
 
