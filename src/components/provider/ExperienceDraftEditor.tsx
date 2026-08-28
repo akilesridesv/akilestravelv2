@@ -226,12 +226,25 @@ export function ExperienceDraftEditor({
             placeholder="Dirección, coordenadas (13.6989,-89.1914) o link de Google Maps"
             onChange={(e) => set("location_address", e.target.value)}
           />
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Para que el mapa marque el punto exacto, pega las <b>coordenadas</b> o un enlace que las
-            incluya. En Google Maps: clic derecho sobre el punto → clic en las coordenadas para
-            copiarlas, o copia el enlace de la barra de direcciones (el que trae “@13.69,-89.19”).
-            Un link corto “maps.app.goo.gl” abre el punto, pero no lo marca dentro del mapa.
-          </p>
+          <div className="mt-2 rounded-xl border border-border bg-secondary/40 p-3 text-[12px] leading-relaxed text-muted-foreground">
+            <p className="mb-1.5 inline-flex items-center gap-1 font-medium text-foreground">
+              <MapPin className="h-3.5 w-3.5 text-primary" /> Cómo marcar el punto exacto en el mapa
+            </p>
+            <p className="mb-1.5">
+              <span className="font-medium text-foreground">Opción A — Coordenadas (más fácil):</span>{" "}
+              en Google Maps haz <b>clic derecho</b> sobre el punto exacto → haz clic en las
+              coordenadas que aparecen (ej. <b>13.6989, -89.1914</b>) para copiarlas → pégalas aquí.
+            </p>
+            <p>
+              <span className="font-medium text-foreground">Opción B — Enlace completo:</span> abre el
+              punto en Google Maps (en computadora) y copia la <b>URL de la barra de direcciones</b> (la
+              larga que trae “@13.69,-89.19”), <b>no</b> la de “Compartir”. Pégala aquí.
+            </p>
+            <p className="mt-1.5">
+              También puedes escribir la dirección. Un link corto “maps.app.goo.gl” abre la ubicación,
+              pero no la marca dentro del mapa.
+            </p>
+          </div>
         </div>
 
         {/* Tiers */}
