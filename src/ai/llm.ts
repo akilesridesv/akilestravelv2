@@ -79,8 +79,10 @@ export async function runCopilotTurn(userText: string, history: ChatTurn[]): Pro
   const changes: string[] = [];
 
   for (let step = 0; step < 6; step++) {
-    const { data, error } = await supabase.functions.invoke("copilot", {
-      body: { systemInstruction: { parts: [{ text: system }] }, contents, tools },
+    // Calls the SQL function public.llm_generate (Postgres → Gemini), which keeps
+    // the API key in Vault server-side. See supabase/migrations/0006_llm_proxy.sql.
+    const { data, error } = await supabase.rpc("llm_generate", {
+      payload: { systemInstruction: { parts: [{ text: system }] }, contents, tools },
     });
     if (error) throw error;
     if (data?.error) throw new Error(data.error.message ?? "Error del modelo");
