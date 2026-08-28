@@ -15,6 +15,7 @@ import { Pagination } from "@/components/ui/Pagination";
 import { deleteImages } from "@/lib/imageStore";
 import { blankDraft, experienceToDraft, displayPrice, bookingLink } from "@/lib/experience";
 import { fuzzyMatch } from "@/lib/fuzzy";
+import { notify } from "@/state/toast";
 import {
   formatUSD,
   dayName,
@@ -410,10 +411,12 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
             readOnly={compact}
             onApprove={() => {
               setStatus(active.id, "confirmed");
+              notify(`Reserva de ${active.contact_name} aprobada.`);
               setModalId(null);
             }}
             onReject={() => {
               setStatus(active.id, "rejected");
+              notify(`Reserva de ${active.contact_name} rechazada.`, "warning");
               setModalId(null);
             }}
           />

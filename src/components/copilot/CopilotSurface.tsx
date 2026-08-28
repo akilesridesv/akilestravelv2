@@ -15,6 +15,7 @@ import {
 } from "@/ai/edits";
 import { bookingLink } from "@/lib/experience";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { notify } from "@/state/toast";
 import * as repo from "@/data/repo";
 import type { ExperienceDraft } from "@/types/domain";
 import { ExperienceDraftEditor } from "@/components/provider/ExperienceDraftEditor";
@@ -46,7 +47,8 @@ type Block =
     }
   | { type: "bookings" }
   | { type: "revenue" }
-  | { type: "experiences" };
+  | { type: "experiences" }
+  | { type: "actions"; label?: string; items: string[] };
 
 interface Message {
   id: string;
@@ -55,9 +57,10 @@ interface Message {
 }
 
 const SUGGESTIONS = [
-  "Tour de café en Ataco, 3 horas, $35 por persona, martes y jueves 9am, máximo 8",
+  "¿Cómo empiezo a recibir reservas?",
+  "Tour de café en Ataco, 3 horas, $35 por persona, sábados 9am, máximo 8",
+  "abre los sábados a las 10am cupo 8",
   "¿Qué reservas tengo esta semana?",
-  "¿Cómo va mi mes?",
 ];
 
 export function CopilotSurface({
@@ -132,6 +135,15 @@ export function CopilotSurface({
           const blocks: Block[] = [{ type: "text", text: summary }];
           if (assumptions.length) blocks.push({ type: "assumptions", items: assumptions });
           blocks.push({ type: "experience_draft", draft });
+          blocks.push({
+            type: "actions",
+            label: "Publícala y luego abre reservas. Toca un ejemplo:",
+            items: [
+              "abre los sábados a las 10am cupo 8",
+              "habilita el 5, 8 y 12 de septiembre",
+              "agrega un tier VIP a $60 que incluye una bebida",
+            ],
+          });
           push("assistant", blocks);
           break;
         }
@@ -146,6 +158,7 @@ export function CopilotSurface({
           const { patch, changes } = parseExperienceEdits(value, exp);
           if (changes.length) {
             updateExperience(exp.id, patch);
+            notify(`Actualicé “${exp.title}”.`);
             push("assistant", [
               { type: "text", text: `Actualicé “${exp.title}”: ${changes.join(", ")}.` },
               { type: "experiences" },
@@ -170,8 +183,10 @@ export function CopilotSurface({
           const dateRes = parseDateSlotCommand(value, exp);
           if (dateRes) {
             updateExperience(exp.id, { date_slots: dateRes.date_slots });
+            notify(`${dateRes.change} en “${exp.title}”.`);
             push("assistant", [
               { type: "text", text: `En “${exp.title}”, ${dateRes.change}.` },
+              { type: "actions", label: "¿Algo más?", items: ["cambia la hora de esas fechas a 2pm", "cupo 12 en esas fechas", "¿qué reservas tengo?"] },
             ]);
             onNavigate?.("calendar");
             break;
@@ -187,6 +202,7 @@ export function CopilotSurface({
             break;
           }
           updateExperience(exp.id, { schedules });
+          notify(`Horarios actualizados en “${exp.title}”.`);
           push("assistant", [
             { type: "text", text: `Listo en “${exp.title}”: ${changes.join(" · ")}.` },
           ]);
@@ -212,6 +228,7 @@ export function CopilotSurface({
             break;
           }
           updateExperience(exp.id, { tiers: res.tiers });
+          notify(`${res.change} en “${exp.title}”.`);
           const count = res.tiers.length;
           push("assistant", [
             {
@@ -253,6 +270,7 @@ export function CopilotSurface({
             break;
           }
           updateExperience(exp.id, { registration_deadline_hours: hours });
+          notify(`Anticipación mínima: ${formatDeadline(hours)}.`);
           push("assistant", [
             {
               type: "text",
@@ -270,6 +288,11 @@ export function CopilotSurface({
             break;
           }
           setBookingStatus(act.booking.id, act.action === "approve" ? "confirmed" : "rejected");
+          notify(
+            act.action === "approve"
+              ? `Aprobaste la reserva de ${act.booking.contact_name}.`
+              : `Rechazaste la reserva de ${act.booking.contact_name}.`
+          );
           push("assistant", [
             {
               type: "text",
@@ -300,12 +323,60 @@ export function CopilotSurface({
             { type: "experiences" },
           ]);
           break;
+        case "guide":
+          if (!experiences.length) {
+            push("assistant", [
+              {
+                type: "text",
+                text: "¡Vamos a poner tu negocio a vender! Primero creamos tu primera experiencia — descríbemela en una frase, o toca un ejemplo:",
+              },
+              {
+                type: "actions",
+                items: [
+                  "Tour de café en Ataco, 3 horas, $35 por persona, sábados 9am, máximo 8",
+                  "Clase de surf en El Tunco, 2 horas, $25, domingos 7am, máximo 6",
+                ],
+              },
+            ]);
+          } else {
+            push("assistant", [
+              {
+                type: "text",
+                text: "Para recibir reservas hay que abrir cuándo, con qué cupo y opciones. Toca una acción o escríbeme con tus palabras — yo lo aplico:",
+              },
+              {
+                type: "actions",
+                label: "1) Abrir disponibilidad",
+                items: ["abre los sábados a las 10am cupo 8", "habilita el 5, 8 y 12 de septiembre"],
+              },
+              {
+                type: "actions",
+                label: "2) Precios y opciones",
+                items: ["agrega un tier VIP a $60 que incluye una bebida", "sube el precio a $40"],
+              },
+              {
+                type: "actions",
+                label: "3) Reglas y reservas",
+                items: ["reserva con 2 días de anticipación", "¿qué reservas tengo?"],
+              },
+            ]);
+          }
+          break;
         case "help":
           push("assistant", [
             {
               type: "text",
-              text:
-                "Soy tu copiloto de negocio. Puedo: crear una experiencia (descríbela en una frase), editarla (“sube el precio del tour de café a $40”), manejar el calendario (“abre los sábados cupo 10”, “bloquea los lunes”), y aprobar o rechazar reservas (“aprueba la de Juan”). También muéstrame tus reservas, ingresos y experiencias. Todo lo puedes hacer también a mano en los paneles.",
+              text: "Soy tu copiloto. Dime en tus palabras lo que quieras y lo aplico. Por ejemplo:",
+            },
+            {
+              type: "actions",
+              items: [
+                "abre los sábados a las 10am cupo 8",
+                "habilita el 5 y 6 de octubre",
+                "sube el precio del tour de café a $40",
+                "agrega un tier VIP a $60",
+                "¿qué reservas tengo?",
+              ],
             },
           ]);
           break;
@@ -314,7 +385,16 @@ export function CopilotSurface({
             {
               type: "text",
               text:
-                "No estoy seguro de qué necesitas. Prueba describiéndome una experiencia para publicarla, o pregúntame por tus reservas o ingresos.",
+                "No estoy seguro de qué necesitas — pero puedo hacerlo por ti. Toca una opción o descríbeme una experiencia para publicarla:",
+            },
+            {
+              type: "actions",
+              items: [
+                "abre los sábados a las 10am cupo 8",
+                "habilita el 5 y 6 de octubre",
+                "¿cómo abro reservas?",
+                "¿qué reservas tengo?",
+              ],
             },
           ]);
       }
@@ -342,7 +422,7 @@ export function CopilotSurface({
         ) : (
           <div className="mx-auto flex max-w-2xl flex-col gap-4">
             {messages.map((m) => (
-              <MessageView key={m.id} message={m} />
+              <MessageView key={m.id} message={m} onAction={handleSend} />
             ))}
             {busy && <ThinkingRow />}
           </div>
@@ -406,14 +486,20 @@ function Welcome({ onPick }: { onPick: (s: string) => void }) {
   );
 }
 
-function MessageView({ message }: { message: Message }) {
+function MessageView({
+  message,
+  onAction,
+}: {
+  message: Message;
+  onAction: (text: string) => void;
+}) {
   const isUser = message.role === "user";
   return (
     <div className={isUser ? "flex justify-end" : "flex justify-start"}>
       <div className={isUser ? "max-w-[85%]" : "w-full"}>
         {message.blocks.map((b, i) => (
           <div key={i} className={i > 0 ? "mt-2" : ""}>
-            <BlockView block={b} isUser={isUser} />
+            <BlockView block={b} isUser={isUser} onAction={onAction} />
           </div>
         ))}
       </div>
@@ -421,7 +507,15 @@ function MessageView({ message }: { message: Message }) {
   );
 }
 
-function BlockView({ block, isUser }: { block: Block; isUser: boolean }) {
+function BlockView({
+  block,
+  isUser,
+  onAction,
+}: {
+  block: Block;
+  isUser: boolean;
+  onAction: (text: string) => void;
+}) {
   switch (block.type) {
     case "text":
       return (
@@ -461,6 +555,23 @@ function BlockView({ block, isUser }: { block: Block; isUser: boolean }) {
       return <RevenuePanel />;
     case "experiences":
       return <ExperiencesPanel />;
+    case "actions":
+      return (
+        <div>
+          {block.label && <p className="mb-1.5 text-sm text-muted-foreground">{block.label}</p>}
+          <div className="grid gap-1.5">
+            {block.items.map((it, i) => (
+              <button
+                key={i}
+                onClick={() => onAction(it)}
+                className="rounded-xl border border-border bg-card px-3 py-2 text-left text-sm transition hover:bg-accent"
+              >
+                {it}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
   }
 }
 

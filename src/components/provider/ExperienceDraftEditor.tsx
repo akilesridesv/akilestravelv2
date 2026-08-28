@@ -10,6 +10,7 @@ import { ScheduleEditor } from "@/components/provider/ScheduleEditor";
 import { DateCalendar } from "@/components/provider/DateCalendar";
 import { DeadlineControl } from "@/components/provider/DeadlineControl";
 import { draftToPatch } from "@/lib/experience";
+import { notify } from "@/state/toast";
 import { formatUSD, cn } from "@/lib/utils";
 import {
   Check,
@@ -61,8 +62,10 @@ export function ExperienceDraftEditor({
   function save() {
     if (isEdit && experienceId) {
       updateExperience(experienceId, draftToPatch(d));
+      notify(`Cambios guardados en “${d.title}”.`);
     } else {
       publishDraft(d);
+      notify(`“${d.title}” enviada para revisión.`);
     }
     setPublished(true);
     onDone?.(d.title);

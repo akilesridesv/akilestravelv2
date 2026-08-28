@@ -3,6 +3,7 @@ import type { DateSlot, Experience } from "@/types/domain";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { addHours } from "@/ai/nlp";
+import { notify } from "@/state/toast";
 import { cn, isoDate, todayISO, todayPartsSV, addDaysISO, monthName, uid } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Check, X, CalendarPlus } from "lucide-react";
 
@@ -116,6 +117,12 @@ export function DateCalendar({
       }
     }
     onChange(next);
+    const n = picked.size;
+    notify(
+      action === "remove"
+        ? `Quitaste ${n} fecha${n === 1 ? "" : "s"}.`
+        : `Habilitaste ${n} fecha${n === 1 ? "" : "s"} a las ${time}.`
+    );
     setSelection(new Set());
   }
 
@@ -193,6 +200,19 @@ export function DateCalendar({
             </button>
           );
         })}
+      </div>
+
+      {/* Legend */}
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1">
+          <span className="h-3 w-3 rounded bg-primary/20 ring-1 ring-primary/40" /> Con salida
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-3 w-3 rounded bg-primary" /> Seleccionado
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-3 w-3 rounded border border-border" /> Sin salida
+        </span>
       </div>
 
       {selection.size > 0 ? (

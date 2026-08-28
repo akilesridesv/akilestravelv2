@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Landing from "@/pages/Landing";
 import { initAuth } from "@/lib/auth";
+import { Toaster } from "@/components/ui/Toaster";
 
 // Code-split heavier routes so the landing loads with a minimal bundle.
 const Auth = lazy(() => import("@/pages/Auth"));
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      <Toaster />
     </BrowserRouter>
   );
 }

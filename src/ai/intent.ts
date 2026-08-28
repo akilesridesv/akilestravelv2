@@ -12,6 +12,7 @@ export type Intent =
   | "view_bookings"
   | "view_revenue"
   | "view_experiences"
+  | "guide"
   | "help"
   | "unknown";
 
@@ -62,6 +63,14 @@ export function classifyIntent(input: string, context?: string): Intent {
 
   // 4. Calendar management: an explicit calendar verb, or day names paired with cupo/hora
   if (CAL_VERB.test(t) || (DAY.test(t) && /(cupo|hora|capacidad)/.test(t))) return "manage_calendar";
+
+  // 4b. Guided setup ("¿cómo abro reservas?", "quiero habilitar fechas", "guíame")
+  if (
+    /(como (abro|habilito|configuro|pongo|empiezo|hago)|ayuda(me)? a (configurar|abrir|habilitar|vender)|guiame|guiar|no se como|por donde empiezo|quiero (abrir|habilitar|recibir|empezar))/.test(
+      t
+    )
+  )
+    return "guide";
 
   // 5. Read-only views
   if (/(reserva|reservas|clientes esta semana|quien viene)/.test(t)) return "view_bookings";
