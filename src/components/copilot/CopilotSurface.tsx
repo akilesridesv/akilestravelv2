@@ -23,6 +23,7 @@ import * as repo from "@/data/repo";
 import type { ExperienceDraft } from "@/types/domain";
 import { parseProfileCommand, parsePreferenceCommand } from "@/ai/profileEdits";
 import { applyProfilePatch, applyPreferencePatch } from "@/ai/tools";
+import { isLLMEnabled, runCopilotTurn, type ChatTurn } from "@/ai/llm";
 import { ExperienceDraftEditor } from "@/components/provider/ExperienceDraftEditor";
 import { BookingsPanel, RevenuePanel, ExperiencesPanel } from "@/components/provider/panels";
 import { ProfilePanel, PreferencesPanel } from "@/components/provider/ProfilePanel";
@@ -461,7 +462,29 @@ export function CopilotSurface({
             },
           ]);
           break;
-        default:
+        default: {
+          if (isLLMEnabled) {
+            const history: ChatTurn[] = messages.flatMap((m) => {
+              const tb = m.blocks.find((b) => b.type === "text") as
+                | { type: "text"; text: string }
+                | undefined;
+              return tb ? [{ role: m.role, text: tb.text }] : [];
+            });
+            try {
+              const res = await runCopilotTurn(value, history);
+              push("assistant", [{ type: "text", text: res.text }]);
+              if (res.changes.length)
+                notify(
+                  res.changes.length === 1
+                    ? res.changes[0]
+                    : `${res.changes.length} cambios aplicados`
+                );
+              break;
+            } catch (e) {
+              console.error("LLM error", e);
+              // fall through to the heuristic suggestions
+            }
+          }
           push("assistant", [
             {
               type: "text",
@@ -478,6 +501,7 @@ export function CopilotSurface({
               ],
             },
           ]);
+        }
       }
     } finally {
       setBusy(false);

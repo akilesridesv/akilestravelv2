@@ -225,7 +225,122 @@ export const TOOLS: AgentTool[] = [
       return { ok: true, message: `${list.length} experiencia(s).`, data: list };
     },
   },
+
+  {
+    name: "update_experience",
+    description:
+      "Edit fields of one of the provider's experiences. Call get_business_snapshot or list_experiences first to get its id. Only include the fields you want to change.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id"],
+      properties: {
+        id: { type: "string", description: "Experience id" },
+        title: { type: "string" },
+        description: { type: "string" },
+        price_per_person: { type: "number" },
+        duration_hours: { type: "number" },
+        country: { type: "string" },
+        city: { type: "string" },
+        area: { type: "string" },
+        min_capacity: { type: "integer" },
+        max_capacity: { type: "integer" },
+        meeting_point: {
+          type: "string",
+          description: "Address, coordinates or Google Maps link (stored as location_address)",
+        },
+        cancellation_policy: { type: "string" },
+        registration_deadline_hours: { type: "integer" },
+        highlights: { type: "array", items: { type: "string" } },
+        whats_included: { type: "array", items: { type: "string" } },
+        whats_not_included: { type: "array", items: { type: "string" } },
+        what_to_bring: { type: "array", items: { type: "string" } },
+      },
+    },
+    run: (input: any) => applyExperiencePatch(input),
+  },
+
+  {
+    name: "set_booking_status",
+    description:
+      "Approve (confirmed) or reject (rejected) a booking. Identify it by booking_id or by the customer's contact_name.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["status"],
+      properties: {
+        booking_id: { type: "string" },
+        contact_name: { type: "string", description: "Customer name to match" },
+        status: { type: "string", enum: ["confirmed", "rejected"] },
+      },
+    },
+    run: (input: { booking_id?: string; contact_name?: string; status: "confirmed" | "rejected" }) => {
+      const s = useApp.getState();
+      let b = input.booking_id ? s.bookings.find((x) => x.id === input.booking_id) : undefined;
+      if (!b && input.contact_name) {
+        const q = input.contact_name.toLowerCase();
+        b = s.bookings.find((x) => x.contact_name.toLowerCase().includes(q));
+      }
+      if (!b) return { ok: false, message: "No encontré esa reserva." };
+      s.setBookingStatus(b.id, input.status);
+      return {
+        ok: true,
+        message: `Reserva de ${b.contact_name} ${input.status === "confirmed" ? "aprobada" : "rechazada"}.`,
+        data: { id: b.id, status: input.status },
+      };
+    },
+  },
 ];
+
+const EXP_LABELS: Partial<Record<keyof Experience, string>> = {
+  title: "título",
+  description: "descripción",
+  price_per_person: "precio",
+  duration_hours: "duración",
+  country: "país",
+  city: "ciudad",
+  area: "zona",
+  min_capacity: "cupo mínimo",
+  max_capacity: "cupo máximo",
+  location_address: "punto de encuentro",
+  cancellation_policy: "política de cancelación",
+  registration_deadline_hours: "anticipación",
+  highlights: "highlights",
+  whats_included: "incluye",
+  whats_not_included: "no incluye",
+  what_to_bring: "qué llevar",
+};
+
+export function applyExperiencePatch(input: any): ToolResult {
+  const s = useApp.getState();
+  const exp =
+    s.experiences.find((e) => e.id === input.id) ??
+    (s.experiences.length === 1 ? s.experiences[0] : undefined);
+  if (!exp) return { ok: false, message: "No encontré esa experiencia." };
+
+  // meeting_point is the friendly alias for location_address.
+  const src: Record<string, unknown> = { ...input };
+  if (src.meeting_point !== undefined) src.location_address = src.meeting_point;
+
+  const patch: Partial<Experience> = {};
+  const changes: string[] = [];
+  for (const key of Object.keys(EXP_LABELS) as (keyof Experience)[]) {
+    const v = (src as any)[key];
+    if (v === undefined) continue;
+    if (JSON.stringify(v) === JSON.stringify((exp as any)[key])) continue;
+    (patch as any)[key] = v;
+    const shown = Array.isArray(v) ? `${v.length} ítem(s)` : v;
+    changes.push(`${EXP_LABELS[key]} → ${shown}`);
+  }
+  if (!changes.length) return { ok: true, message: "Sin cambios en la experiencia.", changes: [] };
+  s.updateExperience(exp.id, patch);
+  return {
+    ok: true,
+    message: `Actualicé “${exp.title}”: ${changes.join(", ")}.`,
+    changes,
+    data: { id: exp.id },
+  };
+}
 
 /** LLM-facing specs (name + description + JSON Schema), no handlers. */
 export const TOOL_SPECS = TOOLS.map((t) => ({
