@@ -8,9 +8,11 @@ import { TOOL_SPECS, runTool, readBusinessContext } from "@/ai/tools";
 // against the Zustand store and feed the results back until it answers.
 // ---------------------------------------------------------------------------
 
-/** On only when Supabase is configured AND the build opts in. */
+/** On only when Supabase is configured AND the build opts in.
+ *  Tolerant of casing/whitespace (accepts "true", "True", "1", "yes"). */
 export const isLLMEnabled =
-  isSupabaseConfigured && import.meta.env.VITE_AI_ENABLED === "true";
+  isSupabaseConfigured &&
+  ["true", "1", "yes"].includes(String(import.meta.env.VITE_AI_ENABLED ?? "").trim().toLowerCase());
 
 export interface LLMTurn {
   text: string;
@@ -55,7 +57,8 @@ function systemPrompt(): string {
     "Ayudas a gestionar y vender experiencias: perfil, precios, disponibilidad, reservas y preferencias.",
     "Puedes LEER el estado y EJECUTAR cambios llamando a las herramientas disponibles. Úsalas en vez de solo describir.",
     "Reglas:",
-    "- Responde en español, breve, cálido y accionable.",
+    "- Responde en español, cálido y accionable.",
+    "- FORMATO (importante): NO escribas párrafos largos. Empieza con UNA frase de contexto; luego usa una lista con viñetas “- ” o numerada “1. ”. Usa **negritas** solo para etiquetas clave (2–4 palabras). Máximo ~5 puntos. Deja una línea en blanco entre secciones.",
     "- Cuando el proveedor pida un cambio, aplícalo con la herramienta correspondiente y confirma en una frase qué hiciste.",
     "- Si necesitas un id (experiencia/reserva), primero llama get_business_snapshot o list_experiences.",
     "- No inventes datos ni confirmes acciones que no ejecutaste. Si falta información, pregunta.",
