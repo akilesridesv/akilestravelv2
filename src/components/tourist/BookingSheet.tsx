@@ -155,7 +155,7 @@ export function BookingSheet({
           Esta experiencia no tiene fechas disponibles por ahora.
         </div>
       ) : step === "select" ? (
-        <div className="grid gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           {/* Dates */}
           <div>
             <Label>Fecha</Label>
@@ -271,12 +271,12 @@ export function BookingSheet({
               : "El proveedor confirmará tu solicitud. No se cobra hasta que la acepte."}
           </p>
 
-          <Button size="lg" disabled={!date || !time} onClick={() => setStep("contact")}>
+          <Button size="lg" className="w-full" disabled={!date || !time} onClick={() => setStep("contact")}>
             Continuar · {formatUSD(total)}
           </Button>
         </div>
       ) : step === "contact" ? (
-        <div className="grid gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <button
             onClick={() => setStep("select")}
             className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -305,7 +305,7 @@ export function BookingSheet({
             />
           </div>
 
-          <Button size="lg" onClick={confirm} disabled={!name.trim() || !email.trim() || submitting}>
+          <Button size="lg" className="w-full" onClick={confirm} disabled={!name.trim() || !email.trim() || submitting}>
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" /> Confirmando…
@@ -321,7 +321,7 @@ export function BookingSheet({
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 py-2 text-center">
+        <div className="flex min-w-0 flex-col gap-4 py-2 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary text-ink">
             <Check className="h-7 w-7" />
           </div>
@@ -366,7 +366,7 @@ export function BookingSheet({
             </div>
           )}
 
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" className="w-full" onClick={onClose}>
             Listo
           </Button>
         </div>
