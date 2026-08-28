@@ -9,7 +9,21 @@ import { ExperienceCard } from "@/components/tourist/ExperienceCard";
 import { TouristHeader, TouristFooter } from "@/components/tourist/TouristChrome";
 import { Markdown } from "@/components/ui/Markdown";
 import { cn } from "@/lib/utils";
-import { Search, Sparkles, MapPin, Loader2, X, ArrowUp, SlidersHorizontal, CalendarDays, Users } from "lucide-react";
+import {
+  Search,
+  Sparkles,
+  MapPin,
+  Loader2,
+  X,
+  ArrowUp,
+  SlidersHorizontal,
+  CalendarDays,
+  Users,
+  Plus,
+  Mic,
+  BarChart3,
+  Cpu,
+} from "lucide-react";
 
 const QUICK = ["Café", "Playa", "Aventura", "Cultura", "Naturaleza", "Menos de $30"];
 
@@ -51,6 +65,7 @@ export default function TouristHome() {
   const [city, setCity] = useState<string>("");
   const [filters, setFilters] = useState<Filters>({ place: "", date: "", people: "" });
   const [showFilters, setShowFilters] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
   const [ai, setAi] = useState<{ loading: boolean; result?: ConciergeResult; q: string } | null>(
     null
   );
@@ -144,6 +159,30 @@ export default function TouristHome() {
     : [];
   const aiParams = ai?.result ? bookingParams(ai.result.people, ai.result.date) : "";
 
+  // Composer "+" menu — Claude-style. Add future tools here (voice, models,
+  // search types, usage…); `soon: true` renders them as projected placeholders.
+  const plusMenu: {
+    key: string;
+    icon: React.ElementType;
+    label: string;
+    onClick?: () => void;
+    soon?: boolean;
+  }[] = [
+    {
+      key: "filters",
+      icon: SlidersHorizontal,
+      label: "Filtros de búsqueda",
+      onClick: () => {
+        setShowFilters(true);
+        setPlusOpen(false);
+      },
+    },
+    { key: "voice", icon: Mic, label: "Búsqueda por voz", soon: true },
+    { key: "model", icon: Cpu, label: "Modelo de búsqueda", soon: true },
+    { key: "type", icon: Sparkles, label: "Tipo de búsqueda", soon: true },
+    { key: "usage", icon: BarChart3, label: "Mis búsquedas", soon: true },
+  ];
+
   return (
     <div className="min-h-dvh bg-background">
       <TouristHeader />
@@ -165,49 +204,96 @@ export default function TouristHome() {
             e.preventDefault();
             ask();
           }}
-          className="mx-auto mt-7 flex max-w-xl items-end gap-2 rounded-3xl border border-border bg-card py-2 pl-4 pr-2 text-left shadow-sm focus-within:ring-2 focus-within:ring-ring"
+          className="mx-auto mt-7 w-full max-w-xl rounded-3xl border border-border bg-card p-2 text-left shadow-sm focus-within:ring-2 focus-within:ring-ring"
         >
-          <Search className="mb-1.5 h-5 w-5 shrink-0 text-muted-foreground" />
-          <textarea
-            ref={taRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                ask();
-              }
-            }}
-            rows={1}
-            placeholder="Ej. tour en lancha en El Tunco para 4 personas"
-            className="max-h-32 w-full resize-none bg-transparent py-1.5 text-base leading-relaxed focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={ai?.loading}
-            aria-label="Buscar"
-            className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-ink transition hover:opacity-90 disabled:opacity-50"
-          >
-            {ai?.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-          </button>
+          <div className="flex items-start gap-2 px-2 pt-1">
+            <Search className="mt-2 h-5 w-5 shrink-0 text-muted-foreground" />
+            <textarea
+              ref={taRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  ask();
+                }
+              }}
+              rows={1}
+              placeholder="Ej. tour en lancha en El Tunco para 4 personas"
+              className="max-h-32 w-full resize-none bg-transparent py-1.5 text-base leading-relaxed focus:outline-none"
+            />
+          </div>
+
+          {/* Action row: + menu (extensible) · active filters · send */}
+          <div className="mt-1 flex items-center gap-2 px-1">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setPlusOpen((o) => !o)}
+                aria-label="Más opciones"
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-full border transition",
+                  plusOpen
+                    ? "border-ink bg-ink text-background"
+                    : "border-border text-muted-foreground hover:bg-accent"
+                )}
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+              {plusOpen && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setPlusOpen(false)} />
+                  <div className="absolute bottom-full left-0 z-30 mb-2 w-60 rounded-2xl border border-border bg-card p-1.5 shadow-xl">
+                    {plusMenu.map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        disabled={item.soon}
+                        onClick={item.onClick}
+                        className={cn(
+                          "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm transition",
+                          item.soon ? "cursor-default opacity-55" : "hover:bg-accent"
+                        )}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="flex-1">{item.label}</span>
+                        {item.soon && (
+                          <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            Pronto
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {hasFilters && (
+              <button
+                type="button"
+                onClick={() => setShowFilters((s) => !s)}
+                className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-xs text-ink"
+              >
+                <SlidersHorizontal className="h-3 w-3" /> Filtros activos
+              </button>
+            )}
+
+            <span className="flex-1" />
+
+            <button
+              type="submit"
+              disabled={ai?.loading}
+              aria-label="Buscar"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-ink transition hover:opacity-90 disabled:opacity-50"
+            >
+              {ai?.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+            </button>
+          </div>
         </form>
 
-        {/* Filters (place / date / companions) */}
+        {/* Filters panel (opened from the + menu) */}
         <div className="mx-auto mt-3 flex max-w-xl flex-col items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setShowFilters((s) => !s)}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition",
-              hasFilters || showFilters
-                ? "border-ink bg-ink text-background"
-                : "border-border text-muted-foreground hover:bg-accent"
-            )}
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            Filtros{hasFilters ? " · activos" : ""}
-          </button>
-
           {showFilters && (
             <div className="grid w-full grid-cols-1 gap-3 rounded-2xl border border-border bg-card p-3 text-left sm:grid-cols-3">
               <label className="text-sm">
@@ -274,7 +360,7 @@ export default function TouristHome() {
           )}
 
           <p className="text-xs text-muted-foreground">
-            Pregúntale al concierge en tus palabras — o usa los filtros.
+            Pregúntale al concierge en tus palabras — o toca <b>+</b> para filtros y más.
           </p>
         </div>
 
