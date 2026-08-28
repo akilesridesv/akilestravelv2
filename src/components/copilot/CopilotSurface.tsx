@@ -630,10 +630,10 @@ export function CopilotSurface({
 
   return (
     <div className="relative flex h-full">
-      {/* Mobile backdrop when the history drawer is open */}
+      {/* Mobile backdrop when the history drawer is open (scoped to the chat pane) */}
       {convEnabled && historyOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+          className="absolute inset-0 z-30 bg-black/40 md:hidden"
           onClick={() => setHistoryOpen(false)}
         />
       )}
@@ -643,7 +643,7 @@ export function CopilotSurface({
         <aside
           className={cn(
             "z-40 flex min-h-0 shrink-0 flex-col bg-secondary/40 transition-all duration-200",
-            "fixed inset-y-0 left-0 w-64 border-r border-border shadow-xl md:static md:z-auto md:shadow-none",
+            "absolute inset-y-0 left-0 w-64 border-r border-border shadow-xl md:static md:z-auto md:shadow-none",
             historyOpen
               ? "translate-x-0 md:w-64"
               : "-translate-x-full md:w-0 md:translate-x-0 md:overflow-hidden md:border-0"
