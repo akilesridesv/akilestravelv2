@@ -7,12 +7,12 @@ import { formatUSD } from "@/lib/utils";
 import { MapPin, Clock } from "lucide-react";
 
 /** Apple-minimal experience card: photo-first, quiet type, clear price. */
-export function ExperienceCard({ e }: { e: PublicExperience }) {
+export function ExperienceCard({ e, params = "" }: { e: PublicExperience; params?: string }) {
   const price = displayPrice(e);
   const verified = e.provider?.verification_status === "approved";
 
   return (
-    <Link to={`/e/${e.id}`} className="group block">
+    <Link to={`/e/${e.id}${params}`} className="group block">
       <div className="relative aspect-[4/5] overflow-hidden rounded-3xl bg-muted">
         <ExperienceImage
           imageRef={e.featured_image}

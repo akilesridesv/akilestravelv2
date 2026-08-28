@@ -52,12 +52,14 @@ export function BookingSheet({
   onClose,
   initialDate,
   initialTime,
+  initialPeople,
 }: {
   experience: PublicExperience;
   open: boolean;
   onClose: () => void;
   initialDate?: string;
   initialTime?: string;
+  initialPeople?: number;
 }) {
   const addBooking = useApp((s) => s.addBooking);
   const deps = useMemo(() => bookableDepartures(experience), [experience]);
@@ -86,10 +88,12 @@ export function BookingSheet({
   const minPeople = Math.max(1, experience.min_capacity || 1);
   const maxPeople = Math.max(1, Math.min(dep?.capacity ?? experience.max_capacity, experience.max_capacity));
   const floorPeople = Math.min(minPeople, maxPeople);
-  const [people, setPeople] = useState(minPeople);
+  const [people, setPeople] = useState(initialPeople && initialPeople > 0 ? initialPeople : minPeople);
   useEffect(() => {
     setPeople((p) => Math.min(Math.max(p, floorPeople), maxPeople));
   }, [floorPeople, maxPeople]);
+  // The concierge asked for more than this departure can seat.
+  const overCap = initialPeople != null && initialPeople > maxPeople;
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -261,11 +265,23 @@ export function BookingSheet({
                 </button>
               </div>
             </div>
-            {minPeople > 1 && (
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                Esta experiencia requiere mínimo {minPeople} personas.
-              </p>
-            )}
+            <div className="mt-1.5 space-y-0.5 text-xs">
+              {overCap ? (
+                <p className="font-medium text-amber-700">
+                  Para esta fecha hay cupo para {maxPeople} {maxPeople === 1 ? "persona" : "personas"}
+                  {initialPeople ? ` (pediste ${initialPeople})` : ""}.
+                </p>
+              ) : maxPeople <= 6 ? (
+                <p className="font-medium text-ink">
+                  🔥 ¡Solo quedan {maxPeople} cupos para esta fecha!
+                </p>
+              ) : (
+                <p className="text-muted-foreground">{maxPeople} cupos disponibles.</p>
+              )}
+              {minPeople > 1 && (
+                <p className="text-muted-foreground">Mínimo {minPeople} personas.</p>
+              )}
+            </div>
           </div>
 
           {/* Price breakdown */}

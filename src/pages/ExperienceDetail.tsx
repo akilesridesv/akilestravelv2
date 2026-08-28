@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { usePublishedExperience } from "@/hooks/usePublicData";
 import type { PublicExperience } from "@/data/repo";
 import { ExperienceImage } from "@/components/provider/ExperienceImage";
@@ -45,7 +45,21 @@ function deadlineText(h: number): string {
 export default function ExperienceDetail() {
   const { id } = useParams();
   const { data: exp, loading } = usePublishedExperience(id);
-  const [sheet, setSheet] = useState<{ open: boolean; date?: string }>({ open: false });
+  const [searchParams] = useSearchParams();
+  const preDate = searchParams.get("date") || undefined;
+  const prePeopleRaw = searchParams.get("people");
+  const prePeople = prePeopleRaw ? parseInt(prePeopleRaw, 10) : undefined;
+  const [sheet, setSheet] = useState<{ open: boolean; date?: string; people?: number }>({
+    open: false,
+  });
+
+  // Concierge deep-link: open the booking sheet pre-filled once the experience loads.
+  useEffect(() => {
+    if (exp && (preDate || prePeople)) {
+      setSheet({ open: true, date: preDate, people: prePeople });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exp?.id]);
 
   if (loading)
     return (
@@ -193,12 +207,15 @@ export default function ExperienceDetail() {
         </div>
       </div>
 
-      <BookingSheet
-        experience={exp}
-        open={sheet.open}
-        onClose={() => setSheet({ open: false })}
-        initialDate={sheet.date}
-      />
+      {sheet.open && (
+        <BookingSheet
+          experience={exp}
+          open
+          onClose={() => setSheet({ open: false })}
+          initialDate={sheet.date}
+          initialPeople={sheet.people}
+        />
+      )}
     </div>
   );
 }
