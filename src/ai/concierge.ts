@@ -51,7 +51,8 @@ export async function runConciergeTurn(
     "Sé FLEXIBLE con el lenguaje y tolera errores de escritura: 'ciudas'→'ciudad', 'aventra'→'aventura', 'surf' aunque venga mal escrito, acentos faltantes, etc.",
     "Interpreta fechas relativas respecto a hoy: 'hoy' = la fecha de hoy, 'mañana' = el día siguiente, 'este fin de semana' = el próximo sábado/domingo.",
     "Si NO hay disponibilidad en la fecha pedida, dilo con amabilidad y sugiere las FECHAS CERCANAS que sí están disponibles (mira available_dates), por ejemplo: 'Para hoy no hay disponibilidad, pero este sábado 30 puedes...'. Menciona esas fechas concretas.",
-    "SIEMPRE responde de forma útil. Si de plano no hay nada relacionado, invítalo cordialmente a intentar con otras palabras o gustos — pero nunca dejes 'matches' vacío si el catálogo tiene experiencias.",
+    "Actúa como un CONCIERGE experto y servicial: busca exhaustivamente por actividad, tags, ubicación y fecha; interpreta la intención aunque el pedido sea vago ('¿qué hago mañana en El Tunco?') o muy específico ('tour en lancha en El Tunco para 4'). Si no hay match exacto, ofrece SIEMPRE lo más parecido disponible y añade UNA pregunta breve para afinar (ej. '¿prefieres algo de aventura o más relax?', '¿te sirve otra fecha o zona cercana?'). Tu meta es facilitarle al turista lo que busca.",
+    "SIEMPRE responde de forma útil. Nunca dejes 'matches' vacío si el catálogo tiene experiencias.",
     "Devuelve EXCLUSIVAMENTE un JSON con esta forma: { reply, matches, people, date }.",
     "- reply: texto corto, cálido y útil, en español (2–4 frases). Si hay coincidencias, descríbelas brevemente e invita a reservar. Si NO hay coincidencia exacta, dilo con amabilidad y SIEMPRE ofrece las experiencias más parecidas que estén disponibles (por actividad, zona o fecha). NUNCA te quedes sin responder ni devuelvas matches vacío si hay algo en el catálogo. Puedes usar **negritas** y viñetas.",
     "- matches: array de ids del catálogo, ordenados por relevancia (máx 6). SOLO ids que existan. Prioriza los que coincidan en ubicación y actividad; si el turista pide una fecha, prioriza los que la tengan en available_dates. Si no hay match exacto, incluye igualmente las alternativas más cercanas (no lo dejes vacío).",
@@ -63,7 +64,10 @@ export async function runConciergeTurn(
     JSON.stringify(catalog(list)),
   ].join("\n");
 
-  const data = await generate({
+  // Fail fast (no retry): a slow/cold call falls back to the instant client-side
+  // filter in TouristHome instead of making the tourist wait through a retry.
+  const data = await generate(
+    {
     systemInstruction: { parts: [{ text: system }] },
     contents: [{ role: "user", parts: [{ text: query }] }],
     generationConfig: {
@@ -80,7 +84,9 @@ export async function runConciergeTurn(
         required: ["reply", "matches"],
       },
     },
-  });
+    },
+    { retryOnTimeout: false }
+  );
 
   const text: string =
     data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";

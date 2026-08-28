@@ -31,11 +31,13 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public, extensions, vault
-set statement_timeout to '55s'   -- Gemini calls can exceed the role's default (~8s)
+set statement_timeout to '25s'   -- cap the wait; client falls back fast on timeout
 as $$
 declare
   api_key text;
-  model   text := 'gemini-3.6-flash';
+  -- gemini-3.6-flash free tier is only 20 requests/DAY; the -lite model has a
+  -- much higher free quota. For production traffic, enable billing on the key.
+  model   text := 'gemini-3.5-flash-lite';
   body    jsonb;
   resp    jsonb;
 begin
@@ -56,7 +58,8 @@ begin
          'generationConfig', coalesce(payload->'generationConfig', '{"temperature":0.4}'::jsonb)
        );
 
-  perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS', '50000');
+  perform extensions.http_set_curlopt('CURLOPT_CONNECTTIMEOUT_MS', '5000');
+  perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS', '20000');
 
   select content::jsonb into resp
   from extensions.http((
@@ -73,4 +76,5 @@ $$;
 
 -- 4) Permissions: only authenticated providers may call it.
 revoke all on function public.llm_generate(jsonb) from public;
-grant execute on function public.llm_generate(jsonb) to authenticated;
+-- authenticated = provider copilot; anon = tourist concierge (public marketplace).
+grant execute on function public.llm_generate(jsonb) to authenticated, anon;

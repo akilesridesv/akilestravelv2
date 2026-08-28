@@ -24,11 +24,15 @@ export interface LLMTurn {
  * synchronous, so the first request after an idle worker can be slow/cold and
  * time out — we retry once on a timeout to mask that. Returns Gemini's JSON.
  */
-export async function generate(payload: unknown): Promise<any> {
+export async function generate(
+  payload: unknown,
+  opts?: { retryOnTimeout?: boolean }
+): Promise<any> {
   if (!supabase) throw new Error("Supabase no configurado");
   const attempt = () => supabase!.rpc("llm_generate", { payload });
   let { data, error } = await attempt();
-  if (error && /tim(e|ed)\s?out|timeout/i.test(error.message ?? "")) {
+  const retry = opts?.retryOnTimeout ?? true;
+  if (retry && error && /tim(e|ed)\s?out|timeout/i.test(error.message ?? "")) {
     ({ data, error } = await attempt());
   }
   if (error) throw error;

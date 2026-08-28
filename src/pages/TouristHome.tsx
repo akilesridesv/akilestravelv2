@@ -1,16 +1,39 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { usePublishedExperiences } from "@/hooks/usePublicData";
 import { searchExperiences, citiesOf } from "@/ai/discovery";
 import { runConciergeTurn, type ConciergeResult } from "@/ai/concierge";
 import { isLLMEnabled } from "@/ai/llm";
+import { bookableDepartures, bookableDates } from "@/lib/availability";
 import { ExperienceCard } from "@/components/tourist/ExperienceCard";
 import { TouristHeader, TouristFooter } from "@/components/tourist/TouristChrome";
 import { Markdown } from "@/components/ui/Markdown";
 import { cn } from "@/lib/utils";
-import { Search, Sparkles, MapPin, Loader2, X, ArrowUp } from "lucide-react";
+import { Search, Sparkles, MapPin, Loader2, X, ArrowUp, SlidersHorizontal, CalendarDays, Users } from "lucide-react";
 
 const QUICK = ["Café", "Playa", "Aventura", "Cultura", "Naturaleza", "Menos de $30"];
+
+// Popular destinations offered in the place filter even if we don't have an
+// experience there yet (so the concierge can suggest the closest alternative).
+const POPULAR_PLACES = [
+  "San Salvador",
+  "La Libertad",
+  "El Tunco",
+  "El Zonte",
+  "Santa Ana",
+  "Ataco",
+  "Juayúa",
+  "Suchitoto",
+  "Sonsonate",
+  "San Miguel",
+  "La Unión",
+];
+
+interface Filters {
+  place: string;
+  date: string;
+  people: string;
+}
 
 /** Query string that pre-fills the booking sheet from a concierge search. */
 function bookingParams(people: number | null, date: string | null): string {
@@ -26,40 +49,92 @@ export default function TouristHome() {
   const list = data ?? [];
   const [query, setQuery] = useState("");
   const [city, setCity] = useState<string>("");
+  const [filters, setFilters] = useState<Filters>({ place: "", date: "", people: "" });
+  const [showFilters, setShowFilters] = useState(false);
   const [ai, setAi] = useState<{ loading: boolean; result?: ConciergeResult; q: string } | null>(
     null
   );
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-grow the search box so the whole query is readable.
+  useEffect(() => {
+    const el = taRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = Math.min(el.scrollHeight, 128) + "px";
+    }
+  }, [query]);
 
   const cities = useMemo(() => citiesOf(list).slice(0, 8), [list]);
+  const places = useMemo(() => {
+    const fromExp = list.flatMap((e) => [e.city, e.department].filter(Boolean) as string[]);
+    return [...new Set([...fromExp, ...POPULAR_PLACES])];
+  }, [list]);
+  const hasFilters = !!(filters.place || filters.date || filters.people);
+
   const results = useMemo(() => {
     let r = searchExperiences(list, query);
     if (city) r = r.filter((e) => e.city === city);
     return r;
   }, [list, query, city]);
 
-  async function ask() {
-    const q = query.trim();
-    if (!q || !list.length) return;
-    if (!isLLMEnabled) return; // fall back to the live text filter
-    setAi({ loading: true, q });
-    try {
-      const result = await runConciergeTurn(q, list);
-      setAi({ loading: false, result, q });
-    } catch (e) {
-      console.error("Concierge error", e);
-      // Never dead-end: show all experiences with a friendly note.
-      setAi({
-        loading: false,
-        q,
-        result: {
-          reply:
-            "Uy, no pude procesar tu búsqueda en este momento 🙈. Mientras tanto, aquí tienes nuestras experiencias disponibles — o intenta de nuevo con otras palabras.",
-          matchIds: list.map((e) => e.id),
-          people: null,
-          date: null,
-        },
-      });
+  function buildQuery(): string {
+    const parts = [query.trim()];
+    if (filters.place) parts.push(`en ${filters.place}`);
+    if (filters.date) parts.push(`el ${filters.date}`);
+    if (filters.people) parts.push(`para ${filters.people} personas`);
+    return parts.filter(Boolean).join(" ").trim();
+  }
+
+  // Instant, free fallback: fuzzy text + the structured filters (no LLM call).
+  function clientFilter() {
+    let r = searchExperiences(list, query);
+    if (filters.place) {
+      const p = filters.place.toLowerCase();
+      r = r.filter((e) =>
+        `${e.city ?? ""} ${e.department ?? ""} ${e.area ?? ""} ${e.country ?? ""}`
+          .toLowerCase()
+          .includes(p)
+      );
     }
+    if (filters.people) {
+      const n = parseInt(filters.people, 10);
+      if (n) r = r.filter((e) => e.max_capacity >= n);
+    }
+    if (filters.date) r = r.filter((e) => bookableDates(bookableDepartures(e)).includes(filters.date));
+    return r;
+  }
+
+  async function ask() {
+    const q = buildQuery();
+    if (!q || !list.length) return;
+    setAi({ loading: true, q });
+
+    if (isLLMEnabled) {
+      try {
+        const result = await runConciergeTurn(q, list);
+        const ids = result.matchIds.length ? result.matchIds : clientFilter().map((e) => e.id);
+        setAi({ loading: false, q, result: { ...result, matchIds: ids } });
+        return;
+      } catch (e) {
+        console.error("Concierge error", e);
+      }
+    }
+
+    // Fell through (LLM off or slow): show relevant results instantly, never a dead end.
+    const fc = clientFilter();
+    setAi({
+      loading: false,
+      q,
+      result: {
+        reply: fc.length
+          ? "Esto es lo más parecido a lo que buscas. ¿Quieres afinar por zona, fecha o número de personas?"
+          : "No encontré algo exacto para tu búsqueda, pero aquí tienes nuestras experiencias disponibles — ajusta los filtros o intenta con otras palabras.",
+        matchIds: (fc.length ? fc : list).map((e) => e.id),
+        people: filters.people ? parseInt(filters.people, 10) : null,
+        date: filters.date || null,
+      },
+    });
   }
 
   const aiExperiences = ai?.result
@@ -90,31 +165,118 @@ export default function TouristHome() {
             e.preventDefault();
             ask();
           }}
-          className="mx-auto mt-7 flex max-w-xl items-center gap-2 rounded-full border border-border bg-card py-2 pl-4 pr-2 shadow-sm focus-within:ring-2 focus-within:ring-ring"
+          className="mx-auto mt-7 flex max-w-xl items-end gap-2 rounded-3xl border border-border bg-card py-2 pl-4 pr-2 text-left shadow-sm focus-within:ring-2 focus-within:ring-ring"
         >
-          <Search className="h-5 w-5 shrink-0 text-muted-foreground" />
-          <input
+          <Search className="mb-1.5 h-5 w-5 shrink-0 text-muted-foreground" />
+          <textarea
+            ref={taRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ej. café para 3 personas el 29 de agosto"
-            className="w-full bg-transparent py-1.5 text-base focus:outline-none"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                ask();
+              }
+            }}
+            rows={1}
+            placeholder="Ej. tour en lancha en El Tunco para 4 personas"
+            className="max-h-32 w-full resize-none bg-transparent py-1.5 text-base leading-relaxed focus:outline-none"
           />
-          {isLLMEnabled && (
-            <button
-              type="submit"
-              disabled={!query.trim() || ai?.loading}
-              aria-label="Preguntar al concierge"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-ink transition hover:opacity-90 disabled:opacity-50"
-            >
-              {ai?.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-            </button>
-          )}
+          <button
+            type="submit"
+            disabled={ai?.loading}
+            aria-label="Buscar"
+            className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-ink transition hover:opacity-90 disabled:opacity-50"
+          >
+            {ai?.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+          </button>
         </form>
-        {isLLMEnabled && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Pregúntale al concierge en tus palabras — filtra por tipo, personas y fecha.
+
+        {/* Filters (place / date / companions) */}
+        <div className="mx-auto mt-3 flex max-w-xl flex-col items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowFilters((s) => !s)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition",
+              hasFilters || showFilters
+                ? "border-ink bg-ink text-background"
+                : "border-border text-muted-foreground hover:bg-accent"
+            )}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            Filtros{hasFilters ? " · activos" : ""}
+          </button>
+
+          {showFilters && (
+            <div className="grid w-full grid-cols-1 gap-3 rounded-2xl border border-border bg-card p-3 text-left sm:grid-cols-3">
+              <label className="text-sm">
+                <span className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
+                  <MapPin className="h-3 w-3" /> Lugar
+                </span>
+                <select
+                  value={filters.place}
+                  onChange={(e) => setFilters((f) => ({ ...f, place: e.target.value }))}
+                  className="h-9 w-full rounded-xl border border-input bg-card px-2 text-sm"
+                >
+                  <option value="">Cualquier lugar</option>
+                  {places.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
+                  <CalendarDays className="h-3 w-3" /> Fecha
+                </span>
+                <input
+                  type="date"
+                  value={filters.date}
+                  onChange={(e) => setFilters((f) => ({ ...f, date: e.target.value }))}
+                  className="h-9 w-full rounded-xl border border-input bg-card px-2 text-sm"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
+                  <Users className="h-3 w-3" /> Personas
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={filters.people}
+                  onChange={(e) => setFilters((f) => ({ ...f, people: e.target.value }))}
+                  placeholder="¿Cuántos?"
+                  className="h-9 w-full rounded-xl border border-input bg-card px-2 text-sm"
+                />
+              </label>
+              <div className="flex items-center gap-3 sm:col-span-3">
+                {hasFilters && (
+                  <button
+                    type="button"
+                    onClick={() => setFilters({ place: "", date: "", people: "" })}
+                    className="text-xs text-muted-foreground underline underline-offset-2"
+                  >
+                    Limpiar
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={ask}
+                  className="ml-auto rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-ink transition hover:opacity-90"
+                >
+                  Buscar
+                </button>
+              </div>
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            Pregúntale al concierge en tus palabras — o usa los filtros.
           </p>
-        )}
+        </div>
 
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           {QUICK.map((q) => (
