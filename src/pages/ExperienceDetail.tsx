@@ -145,7 +145,7 @@ export default function ExperienceDetail() {
 
             {(exp.whats_included?.length > 0 || exp.whats_not_included?.length > 0) && (
               <DetailCard icon={<ClipboardCheck className="h-5 w-5 text-primary" />} title="Qué incluye">
-                <div className="grid gap-5 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   {exp.whats_included?.length > 0 && (
                     <div>
                       <h3 className="mb-2 text-sm font-semibold text-emerald-700">Incluye</h3>
@@ -431,7 +431,7 @@ function PolicyCard({ exp, verified }: { exp: PublicExperience; verified: boolea
       : "Cancelación gratuita el mismo día.");
   return (
     <DetailCard icon={<ShieldCheck className="h-5 w-5 text-primary" />} title="Todo lo que debes saber">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Trust icon={<Timer className="h-4 w-4" />} text={deadlineText(exp.registration_deadline_hours)} />
         <Trust icon={<Ban className="h-4 w-4" />} text={cancellation} />
         <Trust

@@ -47,7 +47,18 @@ export default function TouristHome() {
       setAi({ loading: false, result, q });
     } catch (e) {
       console.error("Concierge error", e);
-      setAi(null); // fall back to the text filter
+      // Never dead-end: show all experiences with a friendly note.
+      setAi({
+        loading: false,
+        q,
+        result: {
+          reply:
+            "Uy, no pude procesar tu búsqueda en este momento 🙈. Mientras tanto, aquí tienes nuestras experiencias disponibles — o intenta de nuevo con otras palabras.",
+          matchIds: list.map((e) => e.id),
+          people: null,
+          date: null,
+        },
+      });
     }
   }
 

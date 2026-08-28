@@ -37,9 +37,9 @@ import {
   ImagePlus,
   Loader2,
   MessageSquare,
-  ChevronDown,
   Plus,
   Trash2,
+  PanelLeft,
 } from "lucide-react";
 
 // Monotonic client timestamps so a user message and its reply keep their order
@@ -96,7 +96,7 @@ export function CopilotSurface({
   const [conversations, setConversations] = useState<repo.Conversation[]>([]);
   const [convId, setConvId] = useState<string | null>(null);
   const convIdRef = useRef<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadingImgs, setUploadingImgs] = useState(false);
@@ -207,7 +207,7 @@ export function CopilotSurface({
       setConversations((cs) => [c, ...cs]);
       setConvId(c.id);
       setMessages([]);
-      setMenuOpen(false);
+      setHistoryOpen(false);
     } catch (e) {
       console.error(e);
     }
@@ -215,7 +215,7 @@ export function CopilotSurface({
 
   function switchChat(id: string) {
     setConvId(id);
-    setMenuOpen(false);
+    setHistoryOpen(false);
   }
 
   async function deleteChat(id: string) {
@@ -629,25 +629,94 @@ export function CopilotSurface({
   const currentTitle = conversations.find((c) => c.id === convId)?.title || "Chat";
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Conversation switcher */}
+    <div className="relative flex h-full">
+      {/* Mobile backdrop when the history drawer is open */}
+      {convEnabled && historyOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+          onClick={() => setHistoryOpen(false)}
+        />
+      )}
+
+      {/* Collapsible chat-history sidebar (drawer on mobile, column on desktop) */}
       {convEnabled && (
-        <div className="relative z-20 shrink-0 border-b border-border bg-background/80 backdrop-blur">
-          <div className="mx-auto flex max-w-2xl items-center gap-2 px-3 py-2 sm:px-4">
+        <aside
+          className={cn(
+            "z-40 flex min-h-0 shrink-0 flex-col bg-secondary/40 transition-all duration-200",
+            "fixed inset-y-0 left-0 w-64 border-r border-border shadow-xl md:static md:z-auto md:shadow-none",
+            historyOpen
+              ? "translate-x-0 md:w-64"
+              : "-translate-x-full md:w-0 md:translate-x-0 md:overflow-hidden md:border-0"
+          )}
+        >
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="inline-flex items-center gap-1.5 text-sm font-medium">
+              <MessageSquare className="h-4 w-4 text-muted-foreground" /> Chats
+            </span>
             <button
               type="button"
-              onClick={() => setMenuOpen((o) => !o)}
-              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1 text-left transition hover:bg-accent"
+              onClick={() => setHistoryOpen(false)}
+              aria-label="Cerrar historial"
+              className="rounded-lg p-1 text-muted-foreground transition hover:bg-accent md:hidden"
             >
-              <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="truncate text-sm font-medium">{currentTitle}</span>
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-                  menuOpen && "rotate-180"
-                )}
-              />
+              <PanelLeft className="h-4 w-4" />
             </button>
+          </div>
+          <div className="px-2">
+            <button
+              type="button"
+              onClick={newChat}
+              className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm transition hover:bg-accent"
+            >
+              <Plus className="h-4 w-4" /> Nuevo chat
+            </button>
+          </div>
+          <div className="mt-1 flex-1 overflow-y-auto px-2 pb-2">
+            {conversations.map((c) => (
+              <div
+                key={c.id}
+                className={cn(
+                  "group flex items-center gap-1 rounded-lg",
+                  c.id === convId ? "bg-accent" : "hover:bg-accent/60"
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => switchChat(c.id)}
+                  className="min-w-0 flex-1 truncate px-2 py-2 text-left text-sm"
+                >
+                  {c.title || "Nuevo chat"}
+                </button>
+                {conversations.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => deleteChat(c.id)}
+                    aria-label="Eliminar chat"
+                    className="shrink-0 pr-2 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </aside>
+      )}
+
+      {/* Chat column */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* Top bar: history toggle + current chat + new */}
+        {convEnabled && (
+          <div className="flex shrink-0 items-center gap-2 border-b border-border bg-background/80 px-3 py-2 backdrop-blur sm:px-4">
+            <button
+              type="button"
+              onClick={() => setHistoryOpen((o) => !o)}
+              aria-label="Historial de chats"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-accent"
+            >
+              <PanelLeft className="h-5 w-5" />
+            </button>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">{currentTitle}</span>
             <button
               type="button"
               onClick={newChat}
@@ -656,48 +725,10 @@ export function CopilotSurface({
               <Plus className="h-3.5 w-3.5" /> Nuevo
             </button>
           </div>
+        )}
 
-          {menuOpen && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-              <div className="absolute inset-x-0 top-full z-20 mx-auto max-w-2xl border-b border-border bg-card px-2 pb-2 shadow-lg">
-                <div className="max-h-64 overflow-y-auto py-1">
-                  {conversations.map((c) => (
-                    <div
-                      key={c.id}
-                      className={cn(
-                        "group flex items-center gap-2 rounded-lg px-2 py-1.5",
-                        c.id === convId ? "bg-accent" : "hover:bg-accent"
-                      )}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => switchChat(c.id)}
-                        className="min-w-0 flex-1 truncate text-left text-sm"
-                      >
-                        {c.title || "Nuevo chat"}
-                      </button>
-                      {conversations.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => deleteChat(c.id)}
-                          aria-label="Eliminar chat"
-                          className="shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Message stream */}
-      <div ref={scrollRef} className="no-scrollbar flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+        {/* Message stream */}
+        <div ref={scrollRef} className="no-scrollbar flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         {empty ? (
           <Welcome onPick={handleSend} />
         ) : (
@@ -753,6 +784,7 @@ export function CopilotSurface({
             <ArrowUp className="h-5 w-5" />
           </Button>
         </form>
+      </div>
       </div>
     </div>
   );

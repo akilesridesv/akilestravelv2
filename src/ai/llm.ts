@@ -19,6 +19,23 @@ export interface LLMTurn {
   changes: string[];
 }
 
+/**
+ * Call the Gemini proxy (public.llm_generate). The Postgres→Gemini call is
+ * synchronous, so the first request after an idle worker can be slow/cold and
+ * time out — we retry once on a timeout to mask that. Returns Gemini's JSON.
+ */
+export async function generate(payload: unknown): Promise<any> {
+  if (!supabase) throw new Error("Supabase no configurado");
+  const attempt = () => supabase!.rpc("llm_generate", { payload });
+  let { data, error } = await attempt();
+  if (error && /tim(e|ed)\s?out|timeout/i.test(error.message ?? "")) {
+    ({ data, error } = await attempt());
+  }
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error.message ?? "Error del modelo");
+  return data;
+}
+
 export interface ChatTurn {
   role: "user" | "assistant";
   text: string;
@@ -82,13 +99,13 @@ export async function runCopilotTurn(userText: string, history: ChatTurn[]): Pro
   const changes: string[] = [];
 
   for (let step = 0; step < 6; step++) {
-    // Calls the SQL function public.llm_generate (Postgres → Gemini), which keeps
-    // the API key in Vault server-side. See supabase/migrations/0006_llm_proxy.sql.
-    const { data, error } = await supabase.rpc("llm_generate", {
-      payload: { systemInstruction: { parts: [{ text: system }] }, contents, tools },
+    // Calls public.llm_generate (Postgres → Gemini) with the key in Vault; retries
+    // once on a cold-start timeout. See supabase/migrations/0006_llm_proxy.sql.
+    const data = await generate({
+      systemInstruction: { parts: [{ text: system }] },
+      contents,
+      tools,
     });
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error.message ?? "Error del modelo");
 
     const cand = data?.candidates?.[0];
     const parts: any[] = cand?.content?.parts ?? [];

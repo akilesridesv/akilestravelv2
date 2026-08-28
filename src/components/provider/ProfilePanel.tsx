@@ -66,31 +66,31 @@ export function ProfilePanel() {
   const social = provider.social ?? {};
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       {/* Cover + identity */}
       <Card className="overflow-hidden">
         <Cover imageRef={provider.cover_url} />
         <div className="px-4 pb-4">
-          <div className="-mt-9 flex items-end gap-3">
+          {/* Only the avatar overlaps the cover; the name sits below on the card
+              so it's always readable (mobile-safe). */}
+          <div className="-mt-9">
             <Avatar imageRef={provider.logo_url} name={provider.business_name} />
-            <div className="mb-1 min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <h2 className="min-w-0 truncate font-display text-xl">{provider.business_name}</h2>
-                {provider.verification_status === "approved" ? (
-                  <Badge tone="success">
-                    <BadgeCheck className="h-3 w-3" /> Verificado
-                  </Badge>
-                ) : (
-                  <Badge tone="warning">
-                    <Clock3 className="h-3 w-3" /> En verificación
-                  </Badge>
-                )}
-              </div>
-              {provider.tagline && (
-                <p className="truncate text-sm text-muted-foreground">{provider.tagline}</p>
-              )}
-            </div>
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <h2 className="min-w-0 break-words font-display text-xl">{provider.business_name}</h2>
+            {provider.verification_status === "approved" ? (
+              <Badge tone="success">
+                <BadgeCheck className="h-3 w-3" /> Verificado
+              </Badge>
+            ) : (
+              <Badge tone="warning">
+                <Clock3 className="h-3 w-3" /> En verificación
+              </Badge>
+            )}
+          </div>
+          {provider.tagline && (
+            <p className="mt-0.5 text-sm text-muted-foreground">{provider.tagline}</p>
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             {provider.city && (
               <span className="inline-flex items-center gap-1">
@@ -114,7 +114,7 @@ export function ProfilePanel() {
       )}
 
       {/* Contact + languages */}
-      <Card className="grid gap-2 p-4">
+      <Card className="grid grid-cols-1 gap-2 p-4">
         <h3 className="text-sm font-medium">Contacto</h3>
         <ContactRow icon={<Mail className="h-4 w-4" />} value={provider.contact_email} empty="Sin correo" />
         <ContactRow icon={<Phone className="h-4 w-4" />} value={provider.contact_phone} empty="Sin teléfono" />
@@ -163,7 +163,7 @@ export function ProfilePanel() {
             Aún no tienes experiencias. Crea una desde el chat o el panel de Experiencias.
           </p>
         ) : (
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             {experiences.map((e) => (
               <div key={e.id} className="flex items-center gap-3 rounded-xl border border-border p-2">
                 <ExperienceImage
@@ -211,9 +211,13 @@ function Avatar({ imageRef, name }: { imageRef?: string; name: string }) {
 
 function ContactRow({ icon, value, empty }: { icon: React.ReactNode; value?: string; empty: string }) {
   return (
-    <div className="flex items-center gap-2 text-sm">
-      <span className="text-muted-foreground">{icon}</span>
-      {value ? <span>{value}</span> : <span className="text-muted-foreground/60">{empty}</span>}
+    <div className="flex items-start gap-2 text-sm">
+      <span className="mt-0.5 shrink-0 text-muted-foreground">{icon}</span>
+      {value ? (
+        <span className="min-w-0 break-all">{value}</span>
+      ) : (
+        <span className="text-muted-foreground/60">{empty}</span>
+      )}
     </div>
   );
 }
@@ -284,9 +288,9 @@ function ProfileEditor({ provider, onClose }: { provider: ProviderProfile; onClo
         </button>
       </div>
 
-      <div className="grid gap-4 p-4">
+      <div className="grid grid-cols-1 gap-4 p-4">
         {/* Images */}
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <Label>Logo del negocio</Label>
             <SingleImage
@@ -328,7 +332,7 @@ function ProfileEditor({ provider, onClose }: { provider: ProviderProfile; onClo
           />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <Label className="inline-flex items-center gap-1">
               <Mail className="h-3 w-3" /> Correo de contacto
@@ -378,7 +382,7 @@ function ProfileEditor({ provider, onClose }: { provider: ProviderProfile; onClo
           />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <Label className="inline-flex items-center gap-1">
               <Instagram className="h-3 w-3" /> Instagram
@@ -515,7 +519,7 @@ export function PreferencesPanel() {
   }
 
   return (
-    <Card className="grid gap-1 p-4">
+    <Card className="grid grid-cols-1 gap-1 p-4">
       <h3 className="mb-1 flex items-center gap-1.5 text-sm font-medium">
         <Bell className="h-4 w-4 text-primary" /> Preferencias
       </h3>

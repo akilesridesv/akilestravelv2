@@ -1,5 +1,5 @@
-import { supabase } from "@/lib/supabase";
 import type { PublicExperience } from "@/data/repo";
+import { generate } from "@/ai/llm";
 import { bookableDepartures, bookableDates } from "@/lib/availability";
 import { displayPrice } from "@/lib/experience";
 
@@ -42,14 +42,16 @@ export async function runConciergeTurn(
   query: string,
   list: PublicExperience[]
 ): Promise<ConciergeResult> {
-  if (!supabase) throw new Error("Supabase no configurado");
-
   const today = new Date().toISOString().slice(0, 10);
   const system = [
     "Eres el concierge de viajes de Akiles Travel — experiencias curadas en El Salvador.",
     `Hoy es ${today} (zona horaria El Salvador).`,
     "El turista describe lo que busca (tipo/actividad, número de personas, fecha, presupuesto y UBICACIÓN: país, departamento, ciudad o zona como 'El Tunco'). Recomienda SOLO experiencias del CATÁLOGO.",
     "Para el match usa: el título y la descripción, los TAGS, la categoría, y la UBICACIÓN (country/department/city/area). Ej.: 'clases de surf en El Tunco' → prioriza experiencias con tag o texto de surf y ubicadas en El Tunco / La Libertad.",
+    "Sé FLEXIBLE con el lenguaje y tolera errores de escritura: 'ciudas'→'ciudad', 'aventra'→'aventura', 'surf' aunque venga mal escrito, acentos faltantes, etc.",
+    "Interpreta fechas relativas respecto a hoy: 'hoy' = la fecha de hoy, 'mañana' = el día siguiente, 'este fin de semana' = el próximo sábado/domingo.",
+    "Si NO hay disponibilidad en la fecha pedida, dilo con amabilidad y sugiere las FECHAS CERCANAS que sí están disponibles (mira available_dates), por ejemplo: 'Para hoy no hay disponibilidad, pero este sábado 30 puedes...'. Menciona esas fechas concretas.",
+    "SIEMPRE responde de forma útil. Si de plano no hay nada relacionado, invítalo cordialmente a intentar con otras palabras o gustos — pero nunca dejes 'matches' vacío si el catálogo tiene experiencias.",
     "Devuelve EXCLUSIVAMENTE un JSON con esta forma: { reply, matches, people, date }.",
     "- reply: texto corto, cálido y útil, en español (2–4 frases). Si hay coincidencias, descríbelas brevemente e invita a reservar. Si NO hay coincidencia exacta, dilo con amabilidad y SIEMPRE ofrece las experiencias más parecidas que estén disponibles (por actividad, zona o fecha). NUNCA te quedes sin responder ni devuelvas matches vacío si hay algo en el catálogo. Puedes usar **negritas** y viñetas.",
     "- matches: array de ids del catálogo, ordenados por relevancia (máx 6). SOLO ids que existan. Prioriza los que coincidan en ubicación y actividad; si el turista pide una fecha, prioriza los que la tengan en available_dates. Si no hay match exacto, incluye igualmente las alternativas más cercanas (no lo dejes vacío).",
@@ -61,28 +63,24 @@ export async function runConciergeTurn(
     JSON.stringify(catalog(list)),
   ].join("\n");
 
-  const { data, error } = await supabase.rpc("llm_generate", {
-    payload: {
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: "user", parts: [{ text: query }] }],
-      generationConfig: {
-        temperature: 0.3,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "object",
-          properties: {
-            reply: { type: "string" },
-            matches: { type: "array", items: { type: "string" } },
-            people: { type: "integer" },
-            date: { type: "string" },
-          },
-          required: ["reply", "matches"],
+  const data = await generate({
+    systemInstruction: { parts: [{ text: system }] },
+    contents: [{ role: "user", parts: [{ text: query }] }],
+    generationConfig: {
+      temperature: 0.3,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "object",
+        properties: {
+          reply: { type: "string" },
+          matches: { type: "array", items: { type: "string" } },
+          people: { type: "integer" },
+          date: { type: "string" },
         },
+        required: ["reply", "matches"],
       },
     },
   });
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error.message ?? "Error del modelo");
 
   const text: string =
     data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";
