@@ -430,7 +430,7 @@ export function CopilotSurface({
       </div>
 
       {/* Composer */}
-      <div className="safe-b border-t border-border bg-background/80 px-4 py-3 backdrop-blur sm:px-6">
+      <div className="safe-b border-t border-border bg-background/80 px-4 pb-5 pt-3 backdrop-blur sm:px-6">
         <form
           className="mx-auto flex max-w-2xl items-end gap-2"
           onSubmit={(e) => {

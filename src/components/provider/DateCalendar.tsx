@@ -224,7 +224,12 @@ export function DateCalendar({
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-sm">
               <span className="mb-1 block text-xs text-muted-foreground">Hora</span>
-              <Input type="time" className="h-9 w-28" value={time} onChange={(e) => setTime(e.target.value)} />
+              <Input
+                type="time"
+                className="h-9 w-36 px-3"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+              />
             </label>
             <label className="text-sm">
               <span className="mb-1 block text-xs text-muted-foreground">Cupo</span>

@@ -91,7 +91,7 @@ export function ScheduleEditor({
               <span className="mb-1 block text-xs text-muted-foreground">Hora</span>
               <Input
                 type="time"
-                className="h-9 w-28"
+                className="h-9 w-36 px-3"
                 value={s.start_time}
                 onChange={(e) => update(s.id, { start_time: e.target.value })}
               />
