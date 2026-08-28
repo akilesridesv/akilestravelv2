@@ -43,9 +43,11 @@ export function searchExperiences(list: PublicExperience[], query: string): Publ
     if (maxPrice != null && displayPrice(e).amount > maxPrice) return false;
     if (people != null && e.max_capacity < people) return false;
     if (!text) return true;
-    const hay = `${e.title} ${e.city ?? ""} ${e.area ?? ""} ${e.category ?? ""} ${e.description} ${(
-      e.highlights ?? []
-    ).join(" ")} ${e.provider?.business_name ?? ""}`;
+    const hay = `${e.title} ${e.city ?? ""} ${e.area ?? ""} ${e.department ?? ""} ${e.country ?? ""} ${
+      e.category ?? ""
+    } ${(e.tags ?? []).join(" ")} ${e.description} ${(e.highlights ?? []).join(" ")} ${
+      e.provider?.business_name ?? ""
+    }`;
     return fuzzyMatch(text, hay);
   });
 }

@@ -10,6 +10,7 @@ import { ScheduleEditor } from "@/components/provider/ScheduleEditor";
 import { DateCalendar } from "@/components/provider/DateCalendar";
 import { DeadlineControl } from "@/components/provider/DeadlineControl";
 import { draftToPatch } from "@/lib/experience";
+import { COUNTRIES, departmentsOf } from "@/lib/geo";
 import { notify } from "@/state/toast";
 import { useDraftImages } from "@/state/draftImages";
 import { formatUSD, cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ import {
   ListChecks,
   Ban,
   Globe,
+  Tag,
 } from "lucide-react";
 
 /**
@@ -196,20 +198,53 @@ export function ExperienceDraftEditor({
           <Label className="inline-flex items-center gap-1">
             <Globe className="h-3 w-3" /> País
           </Label>
-          <Input
+          <select
             value={d.country ?? ""}
-            placeholder="Ej. El Salvador"
-            onChange={(e) => set("country", e.target.value)}
-          />
+            onChange={(e) => setD((prev) => ({ ...prev, country: e.target.value, department: "" }))}
+            className="h-9 w-full rounded-xl border border-input bg-card px-2 text-sm"
+          >
+            <option value="">Selecciona…</option>
+            {COUNTRIES.map((c) => (
+              <option key={c.code} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div>
           <Label className="inline-flex items-center gap-1">
-            <MapPin className="h-3 w-3" /> Ciudad / zona {isDefault("city") && <Dot />}
+            <MapPin className="h-3 w-3" /> Departamento
+          </Label>
+          {departmentsOf(d.country).length ? (
+            <select
+              value={d.department ?? ""}
+              onChange={(e) => set("department", e.target.value)}
+              className="h-9 w-full rounded-xl border border-input bg-card px-2 text-sm"
+            >
+              <option value="">Selecciona…</option>
+              {departmentsOf(d.country).map((dep) => (
+                <option key={dep} value={dep}>
+                  {dep}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <Input
+              value={d.department ?? ""}
+              placeholder="Departamento / estado"
+              onChange={(e) => set("department", e.target.value)}
+            />
+          )}
+        </div>
+
+        <div>
+          <Label className="inline-flex items-center gap-1">
+            <MapPin className="h-3 w-3" /> Ciudad o zona (opcional)
           </Label>
           <Input
             value={d.city ?? ""}
-            placeholder="Ej. Ataco"
+            placeholder="Ej. El Tunco, Ataco…"
             onChange={(e) => set("city", e.target.value)}
           />
         </div>
@@ -236,6 +271,38 @@ export function ExperienceDraftEditor({
         <div className="sm:col-span-2">
           <Label>Descripción</Label>
           <Textarea value={d.description} onChange={(e) => set("description", e.target.value)} rows={3} />
+        </div>
+
+        <div className="sm:col-span-2">
+          <Label className="inline-flex items-center gap-1">
+            <Tag className="h-3 w-3" /> Etiquetas (tags)
+          </Label>
+          <Input
+            value={(d.tags ?? []).join(", ")}
+            placeholder="aventura, relax, al aire libre, surf, familiar"
+            onChange={(e) =>
+              set(
+                "tags",
+                e.target.value
+                  .split(",")
+                  .map((t) => t.trim())
+                  .filter(Boolean)
+              )
+            }
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Separadas por coma. Ayudan a que el concierge de IA encuentre tu experiencia cuando el
+            turista busca por gustos (ej. surf, playa, aventura, cultural).
+          </p>
+          {(d.tags ?? []).length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {d.tags.map((t) => (
+                <span key={t} className="rounded-full bg-accent px-2 py-0.5 text-xs">
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="sm:col-span-2">

@@ -35,6 +35,8 @@ function emptyDraft(): ExperienceDraft {
     max_capacity: 10,
     duration_hours: 2,
     languages: ["Español"],
+    tags: [],
+    country: "El Salvador",
     image_urls: [],
     registration_deadline_hours: 12,
     schedules: [],

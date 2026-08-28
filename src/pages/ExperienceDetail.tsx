@@ -100,10 +100,10 @@ export default function ExperienceDetail() {
           <div>
             <h1 className="font-display text-3xl tracking-tight sm:text-4xl">{exp.title}</h1>
             <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
-              {(exp.city || exp.area || exp.country) && (
+              {(exp.city || exp.area || exp.department || exp.country) && (
                 <span className="inline-flex items-center gap-1.5">
                   <MapPin className="h-4 w-4" />{" "}
-                  {[exp.area, exp.city, exp.country].filter(Boolean).join(", ")}
+                  {[exp.area, exp.city, exp.department, exp.country].filter(Boolean).join(", ")}
                 </span>
               )}
               <span className="inline-flex items-center gap-1.5">
@@ -118,6 +118,19 @@ export default function ExperienceDetail() {
                 </span>
               )}
             </div>
+
+            {exp.tags?.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {exp.tags.map((t) => (
+                  <span
+                    key={t}
+                    className="rounded-full bg-accent px-2.5 py-0.5 text-xs text-muted-foreground"
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {/* Provider */}
             {exp.provider && <ProviderStrip provider={exp.provider} verified={verified} />}

@@ -146,8 +146,10 @@ export interface Experience {
   duration_hours: number;
   languages: string[];
   category?: string;
+  tags: string[]; // free-form labels ("aventura", "relax", "al aire libre") for search
   // location
   country?: string;
+  department?: string;
   city?: string;
   area?: string;
   location_address?: string;
