@@ -70,6 +70,8 @@ export function draftToPatch(d: ExperienceDraft): Partial<Experience> {
     price_per_person: d.price_per_person,
     duration_hours: d.duration_hours,
     city: d.city,
+    area: d.area,
+    location_address: d.location_address,
     min_capacity: d.min_capacity,
     max_capacity: d.max_capacity,
     schedules: d.schedules,

@@ -217,6 +217,20 @@ export function ExperienceDraftEditor({
           <Textarea value={d.description} onChange={(e) => set("description", e.target.value)} rows={3} />
         </div>
 
+        <div className="sm:col-span-2">
+          <Label className="inline-flex items-center gap-1">
+            <MapPin className="h-3 w-3" /> Punto de encuentro
+          </Label>
+          <Input
+            value={d.location_address ?? ""}
+            placeholder="Dirección escrita o link de Google Maps"
+            onChange={(e) => set("location_address", e.target.value)}
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Puede ser una dirección o un enlace de mapa. El turista lo verá (con mapa) en la ficha.
+          </p>
+        </div>
+
         {/* Tiers */}
         <div className="sm:col-span-2">
           <Label className="inline-flex items-center gap-1">

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { usePublishedExperience } from "@/hooks/usePublicData";
+import type { PublicExperience } from "@/data/repo";
 import { ExperienceImage } from "@/components/provider/ExperienceImage";
 import { BookingSheet } from "@/components/tourist/BookingSheet";
 import { TouristHeader, BackLink } from "@/components/tourist/TouristChrome";
@@ -22,7 +23,8 @@ import {
   CalendarDays,
   Timer,
   ChevronLeft,
-   ChevronRight,
+  ChevronRight,
+  Star,
 } from "lucide-react";
 
 function fmtDate(iso: string): string {
@@ -112,16 +114,11 @@ export default function ExperienceDetail() {
             <ListSection icon={<X className="h-4 w-4 text-muted-foreground" />} title="No incluye" items={exp.whats_not_included} muted />
             <ListSection icon={<Backpack className="h-4 w-4 text-primary" />} title="Qué llevar" items={exp.what_to_bring} />
 
-            {/* Location */}
-            {(exp.city || exp.location_address) && (
-              <section className="mt-8">
-                <h2 className="mb-2 font-display text-xl">Punto de encuentro</h2>
-                <p className="text-sm text-muted-foreground">
-                  {[exp.location_address, exp.area, exp.city].filter(Boolean).join(", ") ||
-                    "El proveedor compartirá el punto exacto al confirmar."}
-                </p>
-              </section>
-            )}
+            {/* Meeting point + map */}
+            <MeetingPoint exp={exp} />
+
+            {/* Reviews (placeholder until the review system ships) */}
+            <Reviews />
 
             {/* Policy — trust */}
             <section className="mt-8 grid gap-2 rounded-2xl border border-border p-4 sm:grid-cols-2">
@@ -309,5 +306,79 @@ function Trust({ icon, text }: { icon: React.ReactNode; text: string }) {
       <span className="text-primary">{icon}</span>
       <span className="text-muted-foreground">{text}</span>
     </div>
+  );
+}
+
+function isLink(s?: string): boolean {
+  return !!s && /^(https?:\/\/|www\.)/i.test(s.trim());
+}
+function ensureHttp(u: string): string {
+  return /^https?:\/\//i.test(u) ? u : `https://${u}`;
+}
+
+function MeetingPoint({ exp }: { exp: PublicExperience }) {
+  const mp = exp.location_address?.trim();
+  const link = isLink(mp) ? ensureHttp(mp!) : undefined;
+  const written = mp && !link ? mp : "";
+  const label = written || [exp.area, exp.city].filter(Boolean).join(", ");
+  const query = encodeURIComponent(
+    written || [exp.area, exp.city, "El Salvador"].filter(Boolean).join(", ")
+  );
+  const hasMap = query.length > 0;
+  const openHref = link ?? `https://www.google.com/maps/search/?api=1&query=${query}`;
+
+  return (
+    <section className="mt-8">
+      <h2 className="mb-2 font-display text-xl">Punto de encuentro</h2>
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <MapPin className="h-4 w-4 text-primary" />
+        {label || "El proveedor compartirá el punto exacto al confirmar."}
+      </p>
+
+      {hasMap && (
+        <div className="mt-3 overflow-hidden rounded-2xl border border-border">
+          <iframe
+            title="Mapa del punto de encuentro"
+            src={`https://www.google.com/maps?q=${query}&output=embed`}
+            className="h-56 w-full"
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        </div>
+      )}
+
+      <a
+        href={openHref}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-1.5 text-sm transition hover:bg-accent"
+      >
+        <MapPin className="h-4 w-4 text-primary" /> {link ? "Abrir ubicación" : "Ver en Google Maps"}
+      </a>
+    </section>
+  );
+}
+
+function Reviews() {
+  return (
+    <section className="mt-8">
+      <h2 className="mb-2 font-display text-xl">Reseñas</h2>
+      <div className="flex items-center gap-3 rounded-2xl border border-border p-4">
+        <div className="flex">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Star key={i} className="h-4 w-4 text-muted-foreground/35" />
+          ))}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium">Aún sin reseñas</p>
+          <p className="text-xs text-muted-foreground">
+            Las reseñas verificadas aparecerán después de las primeras reservas.
+          </p>
+        </div>
+        <span className="ml-auto shrink-0 rounded-full bg-primary/15 px-2.5 py-1 text-xs font-medium text-ink">
+          Nuevo
+        </span>
+      </div>
+    </section>
   );
 }
