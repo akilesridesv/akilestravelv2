@@ -148,22 +148,12 @@ export default function ExperienceDetail() {
 
               {dates.length > 0 ? (
                 <>
-                  <p className="mt-4 flex items-center gap-1.5 text-sm font-medium">
-                    <CalendarDays className="h-4 w-4 text-primary" /> Próximas fechas
+                  <p className="mt-4 flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <CalendarDays className="h-4 w-4 text-primary" />
+                    Próxima fecha: <span className="font-medium text-foreground">{fmtDate(dates[0])}</span>
                   </p>
-                  <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto pb-1">
-                    {dates.map((d) => (
-                      <button
-                        key={d}
-                        onClick={() => setSheet({ open: true, date: d })}
-                        className="shrink-0 rounded-2xl border border-border px-3 py-2 text-sm transition hover:border-ink hover:bg-accent"
-                      >
-                        {fmtDate(d)}
-                      </button>
-                    ))}
-                  </div>
                   <Button size="lg" className="mt-4 w-full" onClick={() => setSheet({ open: true })}>
-                    Reservar
+                    Ver fechas y reservar
                   </Button>
                 </>
               ) : (

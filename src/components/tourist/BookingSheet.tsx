@@ -5,6 +5,7 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { bookableDepartures, bookableDates, departuresOn, type Departure } from "@/lib/availability";
+import { BookingCalendar } from "@/components/tourist/BookingCalendar";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useApp } from "@/state/store";
 import * as repo from "@/data/repo";
@@ -156,24 +157,11 @@ export function BookingSheet({
         </div>
       ) : step === "select" ? (
         <div className="flex min-w-0 flex-col gap-4">
-          {/* Dates */}
+          {/* Dates — minimalist month calendar (no horizontal scroll) */}
           <div>
             <Label>Fecha</Label>
-            <div className="no-scrollbar -mx-1 mt-1 flex gap-2 overflow-x-auto px-1 pb-1">
-              {dates.map((d) => (
-                <button
-                  key={d}
-                  onClick={() => pickDate(d)}
-                  className={cn(
-                    "shrink-0 rounded-2xl border px-3.5 py-2 text-sm transition",
-                    d === date
-                      ? "border-ink bg-ink text-background"
-                      : "border-border hover:bg-accent"
-                  )}
-                >
-                  {dateChip(d)}
-                </button>
-              ))}
+            <div className="mt-1 rounded-2xl border border-border p-3">
+              <BookingCalendar available={dates} selected={date} onSelect={pickDate} />
             </div>
           </div>
 
