@@ -86,6 +86,13 @@ export default function TouristHome() {
     return [...new Set([...fromExp, ...POPULAR_PLACES])];
   }, [list]);
   const hasFilters = !!(filters.place || filters.date || filters.people);
+  const filterSummary = [
+    filters.place,
+    filters.date,
+    filters.people ? `${filters.people} pers` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const results = useMemo(() => {
     let r = searchExperiences(list, query);
@@ -171,9 +178,9 @@ export default function TouristHome() {
     {
       key: "filters",
       icon: SlidersHorizontal,
-      label: "Filtros de búsqueda",
+      label: showFilters ? "Ocultar filtros" : "Filtros de búsqueda",
       onClick: () => {
-        setShowFilters(true);
+        setShowFilters((s) => !s);
         setPlusOpen(false);
       },
     },
@@ -243,7 +250,7 @@ export default function TouristHome() {
               {plusOpen && (
                 <>
                   <div className="fixed inset-0 z-20" onClick={() => setPlusOpen(false)} />
-                  <div className="absolute bottom-full left-0 z-30 mb-2 w-60 rounded-2xl border border-border bg-card p-1.5 shadow-xl">
+                  <div className="absolute top-full left-0 z-30 mt-2 w-60 max-w-[calc(100vw-3rem)] rounded-2xl border border-border bg-card p-1.5 shadow-xl">
                     {plusMenu.map((item) => (
                       <button
                         key={item.key}
@@ -273,9 +280,11 @@ export default function TouristHome() {
               <button
                 type="button"
                 onClick={() => setShowFilters((s) => !s)}
-                className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-xs text-ink"
+                title="Editar filtros"
+                className="inline-flex min-w-0 items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-xs text-ink"
               >
-                <SlidersHorizontal className="h-3 w-3" /> Filtros activos
+                <SlidersHorizontal className="h-3 w-3 shrink-0" />
+                <span className="max-w-[150px] truncate sm:max-w-[220px]">{filterSummary}</span>
               </button>
             )}
 
@@ -350,7 +359,10 @@ export default function TouristHome() {
                 )}
                 <button
                   type="button"
-                  onClick={ask}
+                  onClick={() => {
+                    setShowFilters(false);
+                    ask();
+                  }}
                   className="ml-auto rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-ink transition hover:opacity-90"
                 >
                   Buscar
