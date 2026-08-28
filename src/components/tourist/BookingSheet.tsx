@@ -85,15 +85,38 @@ export function BookingSheet({
 
   // Respect the experience's configured group size: default to the minimum,
   // and never let the tourist pick below it (or above the departure capacity).
+  // Live remaining capacity = configured capacity − seats already booked.
+  const [booked, setBooked] = useState<number | null>(null);
+  useEffect(() => {
+    if (!isSupabaseConfigured || !date || !time) {
+      setBooked(0);
+      return;
+    }
+    let alive = true;
+    setBooked(null); // loading
+    repo
+      .loadSlotBooked(experience.id, date, time)
+      .then((n) => alive && setBooked(n))
+      .catch(() => alive && setBooked(0));
+    return () => {
+      alive = false;
+    };
+  }, [experience.id, date, time]);
+
+  const capacity = Math.min(dep?.capacity ?? experience.max_capacity, experience.max_capacity);
+  const remaining = booked == null ? capacity : Math.max(0, capacity - booked);
   const minPeople = Math.max(1, experience.min_capacity || 1);
-  const maxPeople = Math.max(1, Math.min(dep?.capacity ?? experience.max_capacity, experience.max_capacity));
+  const soldOut = booked != null && remaining <= 0;
+  const belowMin = !soldOut && booked != null && remaining < minPeople;
+  const canBook = !soldOut && !belowMin;
+  const maxPeople = Math.max(minPeople, Math.min(remaining, experience.max_capacity));
   const floorPeople = Math.min(minPeople, maxPeople);
   const [people, setPeople] = useState(initialPeople && initialPeople > 0 ? initialPeople : minPeople);
   useEffect(() => {
     setPeople((p) => Math.min(Math.max(p, floorPeople), maxPeople));
   }, [floorPeople, maxPeople]);
-  // The concierge asked for more than this departure can seat.
-  const overCap = initialPeople != null && initialPeople > maxPeople;
+  // The concierge asked for more than what's left for this departure.
+  const overCap = initialPeople != null && booked != null && initialPeople > remaining && canBook;
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -248,7 +271,7 @@ export function BookingSheet({
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setPeople((p) => Math.max(floorPeople, p - 1))}
-                  disabled={people <= floorPeople}
+                  disabled={people <= floorPeople || !canBook}
                   aria-label="Menos"
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-border disabled:opacity-40"
                 >
@@ -257,7 +280,7 @@ export function BookingSheet({
                 <span className="w-6 text-center font-display text-lg">{people}</span>
                 <button
                   onClick={() => setPeople((p) => Math.min(maxPeople, p + 1))}
-                  disabled={people >= maxPeople}
+                  disabled={people >= maxPeople || !canBook}
                   aria-label="Más"
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-border disabled:opacity-40"
                 >
@@ -266,19 +289,28 @@ export function BookingSheet({
               </div>
             </div>
             <div className="mt-1.5 space-y-0.5 text-xs">
-              {overCap ? (
+              {booked == null ? (
+                <p className="text-muted-foreground">Verificando cupos…</p>
+              ) : soldOut ? (
+                <p className="font-medium text-destructive">Agotado para esta fecha.</p>
+              ) : belowMin ? (
                 <p className="font-medium text-amber-700">
-                  Para esta fecha hay cupo para {maxPeople} {maxPeople === 1 ? "persona" : "personas"}
+                  Solo queda{remaining === 1 ? "" : "n"} {remaining} cupo{remaining === 1 ? "" : "s"} y se
+                  requieren mínimo {minPeople}.
+                </p>
+              ) : overCap ? (
+                <p className="font-medium text-amber-700">
+                  Para esta fecha quedan {remaining} cupos
                   {initialPeople ? ` (pediste ${initialPeople})` : ""}.
                 </p>
-              ) : maxPeople <= 6 ? (
+              ) : remaining <= 5 ? (
                 <p className="font-medium text-ink">
-                  🔥 ¡Solo quedan {maxPeople} cupos para esta fecha!
+                  🔥 ¡Solo quedan {remaining} cupo{remaining === 1 ? "" : "s"} para esta fecha!
                 </p>
               ) : (
-                <p className="text-muted-foreground">{maxPeople} cupos disponibles.</p>
+                <p className="text-muted-foreground">{remaining} cupos disponibles.</p>
               )}
-              {minPeople > 1 && (
+              {minPeople > 1 && canBook && (
                 <p className="text-muted-foreground">Mínimo {minPeople} personas.</p>
               )}
             </div>
@@ -301,8 +333,13 @@ export function BookingSheet({
               : "El proveedor confirmará tu solicitud. No se cobra hasta que la acepte."}
           </p>
 
-          <Button size="lg" className="w-full" disabled={!date || !time} onClick={() => setStep("contact")}>
-            Continuar · {formatUSD(total)}
+          <Button
+            size="lg"
+            className="w-full"
+            disabled={!date || !time || !canBook}
+            onClick={() => setStep("contact")}
+          >
+            {soldOut ? "Agotado para esta fecha" : `Continuar · ${formatUSD(total)}`}
           </Button>
         </div>
       ) : step === "contact" ? (

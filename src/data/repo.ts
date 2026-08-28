@@ -373,6 +373,21 @@ export interface NewBooking {
   confirmation_code: string;
 }
 
+/** Seats already taken for an activity on a given date + time (live). */
+export async function loadSlotBooked(
+  activityId: string,
+  date: string,
+  time: string
+): Promise<number> {
+  const { data, error } = await sb().rpc("slot_booked_seats", {
+    p_activity: activityId,
+    p_date: date,
+    p_time: time,
+  });
+  if (error) throw error;
+  return typeof data === "number" ? data : 0;
+}
+
 /** Create a booking as an anonymous tourist (user_id null — allowed by RLS). */
 export async function createBooking(b: NewBooking): Promise<void> {
   // No .select() back: anon cannot read bookings under RLS, and we already hold
