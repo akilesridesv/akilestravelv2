@@ -11,6 +11,7 @@ import {
   RevenuePanel,
   CalendarPanel,
 } from "@/components/provider/panels";
+import { ProfilePanel } from "@/components/provider/ProfilePanel";
 import { Badge } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
@@ -22,15 +23,17 @@ import {
   BadgeCheck,
   Clock3,
   LogOut,
+  User,
 } from "lucide-react";
 
-type Panel = "experiences" | "calendar" | "bookings" | "revenue";
+type Panel = "experiences" | "calendar" | "bookings" | "revenue" | "profile";
 
 const PANEL_TABS: { key: Panel; label: string; icon: React.ReactNode }[] = [
   { key: "experiences", label: "Experiencias", icon: <LayoutGrid className="h-4 w-4" /> },
   { key: "calendar", label: "Calendario", icon: <CalendarDays className="h-4 w-4" /> },
   { key: "bookings", label: "Reservas", icon: <Inbox className="h-4 w-4" /> },
   { key: "revenue", label: "Ingresos", icon: <TrendingUp className="h-4 w-4" /> },
+  { key: "profile", label: "Perfil", icon: <User className="h-4 w-4" /> },
 ];
 
 export default function ProviderDashboard() {
@@ -84,6 +87,8 @@ export default function ProviderDashboard() {
         return <BookingsPanel />;
       case "revenue":
         return <RevenuePanel />;
+      case "profile":
+        return <ProfilePanel />;
     }
   }
 
@@ -93,25 +98,31 @@ export default function ProviderDashboard() {
     <div className="flex h-dvh flex-col overflow-hidden bg-background">
       {/* Header */}
       <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3 sm:px-6">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary font-display text-lg text-ink">
-          A
-        </div>
-        <div className="min-w-0">
-          <p className="truncate font-display text-lg leading-tight">
-            {provider?.business_name ?? "Mi negocio"}
-          </p>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            {provider?.verification_status === "approved" ? (
-              <Badge tone="success">
-                <BadgeCheck className="h-3 w-3" /> Verificado
-              </Badge>
-            ) : (
-              <Badge tone="warning">
-                <Clock3 className="h-3 w-3" /> Verificación pendiente
-              </Badge>
-            )}
+        <button
+          onClick={() => goToPanel("profile")}
+          className="flex min-w-0 items-center gap-3 rounded-xl text-left transition hover:opacity-80"
+          aria-label="Ver mi perfil"
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary font-display text-lg text-ink">
+            {(provider?.business_name ?? "A").charAt(0).toUpperCase()}
           </div>
-        </div>
+          <div className="min-w-0">
+            <p className="truncate font-display text-lg leading-tight">
+              {provider?.business_name ?? "Mi negocio"}
+            </p>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              {provider?.verification_status === "approved" ? (
+                <Badge tone="success">
+                  <BadgeCheck className="h-3 w-3" /> Verificado
+                </Badge>
+              ) : (
+                <Badge tone="warning">
+                  <Clock3 className="h-3 w-3" /> Verificación pendiente
+                </Badge>
+              )}
+            </div>
+          </div>
+        </button>
         <button
           onClick={async () => {
             await authSignOut();
@@ -163,7 +174,7 @@ export default function ProviderDashboard() {
           </div>
 
           {/* Bottom nav: Chat + the panels */}
-          <nav className="safe-b grid shrink-0 grid-cols-5 border-t border-border bg-background">
+          <nav className="safe-b grid shrink-0 grid-cols-6 border-t border-border bg-background">
             <MobileTab
               label="Chat"
               icon={<MessageSquare className="h-5 w-5" />}

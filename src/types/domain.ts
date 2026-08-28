@@ -26,14 +26,61 @@ export type BookingStatus =
   | "expired"
   | "payment_failed";
 
+export interface ProviderSocial {
+  instagram?: string;
+  facebook?: string;
+  tiktok?: string;
+  website?: string;
+}
+
+export type NotifyChannel = "email" | "whatsapp" | "both" | "none";
+
+export interface ProviderPreferences {
+  notify_new_booking: boolean; // alert me when a tourist books
+  notify_cancellation: boolean; // alert me on cancellations
+  notify_daily_summary: boolean; // daily digest of the day's departures
+  notify_channel: NotifyChannel; // where alerts are delivered
+  auto_approve_bookings: boolean; // instant vs. request-to-book (mirrors booking_mode)
+  language: "es" | "en"; // provider UI / assistant language
+}
+
+export const DEFAULT_PREFERENCES: ProviderPreferences = {
+  notify_new_booking: true,
+  notify_cancellation: true,
+  notify_daily_summary: false,
+  notify_channel: "email",
+  auto_approve_bookings: true,
+  language: "es",
+};
+
 export interface ProviderProfile {
   id: string;
   user_id: string;
   business_name: string;
-  bio?: string;
+  tagline?: string; // short one-liner ("Café de altura en Ataco")
+  bio?: string; // who they are / what they do
+  contact_email?: string; // email shown to tourists
+  contact_phone?: string; // phone shown to tourists
+  whatsapp?: string; // WhatsApp number for bookings/questions
+  city?: string; // base city / zone of operation
+  languages: string[]; // languages the provider speaks
+  logo_url?: string; // avatar / business logo image ref
+  cover_url?: string; // profile cover image ref
+  social: ProviderSocial;
+  preferences: ProviderPreferences;
   verification_status: VerificationStatus;
   booking_mode: BookingMode;
   created_at: string;
+}
+
+/** Fill in defaults so older/remote records without the new fields never break. */
+export function withProviderDefaults(p: Partial<ProviderProfile> & { id: string; user_id: string; business_name: string; verification_status: VerificationStatus; booking_mode: BookingMode; created_at: string }): ProviderProfile {
+  return {
+    ...p,
+    languages: p.languages ?? ["Español"],
+    social: p.social ?? {},
+    preferences: { ...DEFAULT_PREFERENCES, ...(p.preferences ?? {}) },
+  };
 }
 
 export interface RecurringSchedule {

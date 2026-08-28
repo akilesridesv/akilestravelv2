@@ -7,6 +7,7 @@ import type {
   RecurringSchedule,
   TicketTier,
 } from "@/types/domain";
+import { withProviderDefaults } from "@/types/domain";
 
 // Data access against Supabase. Only called when the client is configured.
 function sb() {
@@ -17,15 +18,47 @@ function sb() {
 // --- provider profile -------------------------------------------------------
 
 function mapProvider(r: any): ProviderProfile {
-  return {
+  return withProviderDefaults({
     id: r.id,
     user_id: r.user_id,
     business_name: r.business_name,
+    tagline: r.tagline ?? undefined,
     bio: r.bio ?? undefined,
+    contact_email: r.contact_email ?? undefined,
+    contact_phone: r.contact_phone ?? undefined,
+    whatsapp: r.whatsapp ?? undefined,
+    city: r.city ?? undefined,
+    languages: r.languages ?? undefined,
+    logo_url: r.logo_url ?? undefined,
+    cover_url: r.cover_url ?? undefined,
+    social: r.social ?? undefined,
+    preferences: r.preferences ?? undefined,
     verification_status: r.verification_status,
     booking_mode: r.booking_mode,
     created_at: r.created_at,
-  };
+  });
+}
+
+export async function saveProvider(p: ProviderProfile): Promise<void> {
+  const { error } = await sb()
+    .from("provider_profiles")
+    .update({
+      business_name: p.business_name,
+      tagline: p.tagline ?? null,
+      bio: p.bio ?? null,
+      contact_email: p.contact_email ?? null,
+      contact_phone: p.contact_phone ?? null,
+      whatsapp: p.whatsapp ?? null,
+      city: p.city ?? null,
+      languages: p.languages,
+      logo_url: p.logo_url ?? null,
+      cover_url: p.cover_url ?? null,
+      social: p.social,
+      preferences: p.preferences,
+      booking_mode: p.booking_mode,
+    })
+    .eq("id", p.id);
+  if (error) throw error;
 }
 
 export async function ensureProviderProfile(userId: string, name?: string): Promise<ProviderProfile> {

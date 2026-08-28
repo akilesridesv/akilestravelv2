@@ -6,6 +6,7 @@ import type {
   ExperienceDraft,
   ProviderProfile,
 } from "@/types/domain";
+import { DEFAULT_PREFERENCES, withProviderDefaults } from "@/types/domain";
 import { uid } from "@/lib/utils";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import * as repo from "@/data/repo";
@@ -39,6 +40,7 @@ interface AppState {
   setAuthReady: () => void;
 
   // provider actions
+  updateProvider: (patch: Partial<ProviderProfile>) => void;
   publishDraft: (draft: ExperienceDraft) => Experience;
   updateExperience: (id: string, patch: Partial<Experience>) => void;
   removeExperience: (id: string) => void;
@@ -52,6 +54,10 @@ function makeProvider(user: LocalUser): ProviderProfile {
     id: uid("prov"),
     user_id: user.id,
     business_name: user.name ? `${user.name}` : "Mi negocio",
+    contact_email: user.email,
+    languages: ["Español"],
+    social: {},
+    preferences: { ...DEFAULT_PREFERENCES },
     verification_status: "pending",
     booking_mode: "instant",
     created_at: new Date().toISOString(),
@@ -124,6 +130,30 @@ export const useApp = create<AppState>()(
 
       setAuthReady: () => set({ authReady: true }),
 
+      updateProvider: (patch) => {
+        const cur = get().provider;
+        if (!cur) return;
+        const next: ProviderProfile = {
+          ...cur,
+          ...patch,
+          social: patch.social ? { ...cur.social, ...patch.social } : cur.social,
+          preferences: patch.preferences
+            ? { ...cur.preferences, ...patch.preferences }
+            : cur.preferences,
+        };
+        // Keep booking_mode and the friendly auto-approve toggle consistent.
+        if (patch.preferences?.auto_approve_bookings !== undefined) {
+          next.booking_mode = patch.preferences.auto_approve_bookings ? "instant" : "request";
+        } else if (patch.booking_mode) {
+          next.preferences = {
+            ...next.preferences,
+            auto_approve_bookings: patch.booking_mode === "instant",
+          };
+        }
+        set({ provider: next });
+        if (remote) void repo.saveProvider(next).catch(console.error);
+      },
+
       publishDraft: (draft) => {
         const provider = get().provider;
         const now = new Date().toISOString();
@@ -167,6 +197,13 @@ export const useApp = create<AppState>()(
         if (remote) void repo.updateBookingStatus(id, status).catch(console.error);
       },
     }),
-    { name: "akiles-travel-v2" }
+    {
+      name: "akiles-travel-v2",
+      // Older persisted providers predate languages/social/preferences — backfill
+      // defaults on rehydrate so the profile & preferences UI never reads undefined.
+      onRehydrateStorage: () => (state) => {
+        if (state?.provider) state.provider = withProviderDefaults(state.provider as any);
+      },
+    }
   )
 );

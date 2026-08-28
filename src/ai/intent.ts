@@ -12,6 +12,9 @@ export type Intent =
   | "view_bookings"
   | "view_revenue"
   | "view_experiences"
+  | "view_profile"
+  | "edit_profile"
+  | "set_preferences"
   | "guide"
   | "help"
   | "unknown";
@@ -45,6 +48,31 @@ export function classifyIntent(input: string, context?: string): Intent {
 
   // 1c. Share an experience (get its booking link)
   if (/(comparte|compartir)/.test(t) || /\b(enlace|link)\b/.test(t)) return "share_experience";
+
+  // 1c-i. Preferences / settings (notifications, approval mode, assistant language)
+  if (
+    /(preferencia|notificaci|\bavisos?\b|alertas?|auto\s?aprob|aprob\w*\s+autom|reservas?\s+autom|idioma del asistente|resumen diario|silenci)/.test(
+      t
+    ) ||
+    (/(configuracion|ajustes|preferencia)/.test(t) && /(notif|aviso|reserva|idioma|aprob|canal)/.test(t))
+  )
+    return "set_preferences";
+
+  // 1c-ii. View the provider profile
+  if (
+    /(mi perfil|ver (mi )?perfil|muestrame (mi )?perfil|perfil (del|de mi|de) (negocio|proveedor)|como se ve mi perfil)/.test(
+      t
+    )
+  )
+    return "view_profile";
+
+  // 1c-iii. Edit profile: contact channels, business identity, media, social links
+  if (
+    /(correo de contacto|correo del negocio|email de contacto|mi (correo|email|telefono|numero|celular|whatsapp)|telefono (del|de) (negocio|contacto)|numero de (contacto|telefono|whatsapp)|\bwhatsapp\b|instagram|facebook|tik\s?tok|sitio web|pagina web|nombre (del|de la|de mi|comercial) (negocio|empresa|marca)?|mi (negocio|empresa) se llama|renombra (el negocio|la empresa)|eslogan|slogan|tagline|\bbio\b|biografia|descripcion del negocio|sobre (nosotros|mi negocio)|logo|portada|idiomas?|hablo|hablamos|ciudad (del|de) (negocio|contacto)|estoy ubicad|operamos en)/.test(
+      t
+    )
+  )
+    return "edit_profile";
 
   // 1d. Manage tiers (add / remove a ticket tier)
   if (/\btiers?\b/.test(t) && /(agrega|agregar|anade|anadir|crea|crear|pon|poner|quita|quitar|elimina|eliminar|borra|borrar|remueve|remover)/.test(t))

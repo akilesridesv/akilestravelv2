@@ -21,8 +21,11 @@ import { processImageFile, ImageError } from "@/lib/imageProcess";
 import { putImage, putImageRemote } from "@/lib/imageStore";
 import * as repo from "@/data/repo";
 import type { ExperienceDraft } from "@/types/domain";
+import { parseProfileCommand, parsePreferenceCommand } from "@/ai/profileEdits";
+import { applyProfilePatch, applyPreferencePatch } from "@/ai/tools";
 import { ExperienceDraftEditor } from "@/components/provider/ExperienceDraftEditor";
 import { BookingsPanel, RevenuePanel, ExperiencesPanel } from "@/components/provider/panels";
+import { ProfilePanel, PreferencesPanel } from "@/components/provider/ProfilePanel";
 import { useApp } from "@/state/store";
 import { experienceToDraft } from "@/lib/experience";
 import { uid } from "@/lib/utils";
@@ -51,6 +54,8 @@ type Block =
   | { type: "bookings" }
   | { type: "revenue" }
   | { type: "experiences" }
+  | { type: "profile" }
+  | { type: "preferences" }
   | { type: "actions"; label?: string; items: string[] };
 
 interface Message {
@@ -338,6 +343,49 @@ export function CopilotSurface({
           ]);
           break;
         }
+        case "view_profile":
+          push("assistant", [
+            { type: "text", text: "Así se ve tu perfil. Toca “Editar perfil” o dime el cambio (ej. “mi WhatsApp es 7777-8888”)." },
+            { type: "profile" },
+          ]);
+          onNavigate?.("profile");
+          break;
+        case "edit_profile": {
+          const patch = parseProfileCommand(value);
+          if (patch) {
+            const res = applyProfilePatch(patch);
+            notify(res.message, res.ok ? "success" : "warning");
+            push("assistant", [
+              { type: "text", text: res.ok && res.changes?.length ? res.message : "Abrí tu perfil para editarlo 👇" },
+              { type: "profile" },
+            ]);
+          } else {
+            push("assistant", [
+              { type: "text", text: "Abrí tu perfil para que lo edites. También puedes decirme, por ejemplo, “mi correo de contacto es hola@negocio.com” o “el nombre de mi negocio es Café Ataco”." },
+              { type: "profile" },
+            ]);
+          }
+          onNavigate?.("profile");
+          break;
+        }
+        case "set_preferences": {
+          const patch = parsePreferenceCommand(value);
+          if (patch) {
+            const res = applyPreferencePatch(patch);
+            notify(res.message, res.ok ? "success" : "warning");
+            push("assistant", [
+              { type: "text", text: res.ok && res.changes?.length ? res.message : "Aquí están tus preferencias 👇" },
+              { type: "preferences" },
+            ]);
+          } else {
+            push("assistant", [
+              { type: "text", text: "Estas son tus preferencias. Puedes cambiarlas aquí o decirme, por ejemplo, “activa aprobar reservas automáticamente” o “mándame los avisos por WhatsApp”." },
+              { type: "preferences" },
+            ]);
+          }
+          onNavigate?.("profile");
+          break;
+        }
         case "view_bookings":
           push("assistant", [
             { type: "text", text: "Estas son tus reservas. Puedes aprobar o rechazar las pendientes aquí mismo." },
@@ -444,6 +492,7 @@ export function CopilotSurface({
       calendar: "Ej. “abre los sábados con cupo 10”…",
       bookings: "Ej. “aprueba la de Juan”…",
       revenue: "Pregunta por tus ingresos…",
+      profile: "Ej. “mi WhatsApp es 7777-8888”…",
     } as Record<string, string>)[context ?? ""] ?? "Escribe a tu copiloto…";
 
   return (
@@ -605,6 +654,10 @@ function BlockView({
       return <RevenuePanel />;
     case "experiences":
       return <ExperiencesPanel />;
+    case "profile":
+      return <ProfilePanel />;
+    case "preferences":
+      return <PreferencesPanel />;
     case "actions":
       return (
         <div>
