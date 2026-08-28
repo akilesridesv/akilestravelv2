@@ -1,5 +1,5 @@
 import type { Experience } from "@/types/domain";
-import { dayName, todayISO, parseISODate } from "@/lib/utils";
+import { dayName, todayISO, parseISODate, cn } from "@/lib/utils";
 import { CalendarDays } from "lucide-react";
 
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
@@ -83,6 +83,91 @@ export function WeekAgenda({
             <div className="w-14 shrink-0 pt-0.5">
               <p className="text-sm font-medium capitalize">{dayName(day).slice(0, 3)}</p>
               <p className="text-[11px] text-muted-foreground">{deps.length || "—"}</p>
+            </div>
+            <div className="grid min-w-0 flex-1 gap-1.5">
+              {deps.length === 0 ? (
+                <span className="text-sm text-muted-foreground/60">Sin salidas</span>
+              ) : (
+                deps.map((d, i) => <DepartureRow key={i} d={d} onSelect={onSelect} />)
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Departures on a concrete date: recurring (matching weekday) + date_slots. */
+export function departuresForDate(experiences: Experience[], iso: string): Departure[] {
+  const dow = parseISODate(iso).getDay();
+  const deps = experiences.flatMap((e) => {
+    const rec = e.schedules
+      .filter((s) => s.day_of_week === dow)
+      .map((s) => ({
+        expId: e.id,
+        title: e.title,
+        time: s.start_time,
+        capacity: s.capacity,
+        tierCount: s.tier_ids?.length ?? e.tiers.length,
+      }));
+    const dat = (e.date_slots ?? [])
+      .filter((s) => s.slot_date === iso && s.status === "open")
+      .map((s) => ({
+        expId: e.id,
+        title: e.title,
+        time: s.start_time,
+        capacity: s.capacity,
+        tierCount: s.tier_ids?.length ?? e.tiers.length,
+      }));
+    return [...rec, ...dat];
+  });
+  const seen = new Set<string>();
+  return deps
+    .filter((d) => {
+      const k = `${d.expId}-${d.time}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .sort((a, b) => a.time.localeCompare(b.time));
+}
+
+/** Agenda over a list of concrete dates (used for Today, Week and custom Range). */
+export function DatedAgenda({
+  experiences,
+  dates,
+  onSelect,
+}: {
+  experiences: Experience[];
+  dates: string[];
+  onSelect?: (expId: string) => void;
+}) {
+  const today = todayISO();
+  const totalDeps = dates.reduce((n, iso) => n + departuresForDate(experiences, iso).length, 0);
+  if (totalDeps === 0 && dates.length > 3) return <Empty text="Sin salidas en este periodo" />;
+
+  return (
+    <div className="grid gap-2">
+      {dates.map((iso) => {
+        const deps = departuresForDate(experiences, iso);
+        const dd = parseISODate(iso);
+        const isToday = iso === today;
+        return (
+          <div
+            key={iso}
+            className={cn(
+              "flex gap-3 rounded-xl border p-3",
+              isToday ? "border-primary/50 bg-primary/5" : "border-border bg-card"
+            )}
+          >
+            <div className="w-16 shrink-0 pt-0.5">
+              <p className={cn("text-sm font-medium capitalize", isToday && "text-ink")}>
+                {dayName(dd.getDay()).slice(0, 3)} {dd.getDate()}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {isToday ? "hoy" : deps.length || "—"}
+              </p>
             </div>
             <div className="grid min-w-0 flex-1 gap-1.5">
               {deps.length === 0 ? (

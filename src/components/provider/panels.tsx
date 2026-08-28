@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ExperienceDraftEditor } from "@/components/provider/ExperienceDraftEditor";
 import { ExperienceImage } from "@/components/provider/ExperienceImage";
 import { ScheduleEditor } from "@/components/provider/ScheduleEditor";
-import { WeekAgenda, TodayAgenda } from "@/components/provider/WeekAgenda";
+import { TodayAgenda, DatedAgenda } from "@/components/provider/WeekAgenda";
 import { DateCalendar } from "@/components/provider/DateCalendar";
 import { Modal } from "@/components/ui/modal";
 import { SearchBar } from "@/components/ui/SearchBar";
@@ -15,7 +15,17 @@ import { Pagination } from "@/components/ui/Pagination";
 import { deleteImages } from "@/lib/imageStore";
 import { blankDraft, experienceToDraft, displayPrice, bookingLink } from "@/lib/experience";
 import { fuzzyMatch } from "@/lib/fuzzy";
-import { formatUSD, dayName, uid, cn } from "@/lib/utils";
+import {
+  formatUSD,
+  dayName,
+  uid,
+  cn,
+  todayISO,
+  isoDate,
+  addDaysISO,
+  parseISODate,
+  monthName,
+} from "@/lib/utils";
 import { addHours } from "@/ai/nlp";
 import type { Booking, Experience, PublicationStatus, RecurringSchedule } from "@/types/domain";
 import {
@@ -30,6 +40,7 @@ import {
   Pencil,
   Trash2,
   Plus,
+  ChevronLeft,
   ChevronRight,
   Share2,
   Check as CheckIcon,
@@ -239,6 +250,9 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
   const [modalId, setModalId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
+  const [statusF, setStatusF] = useState<string>("");
+  const [expF, setExpF] = useState<string>("");
+  const [view, setView] = useState<"list" | "calendar">("list");
   const PAGE = 8;
 
   if (!bookings.length)
@@ -251,30 +265,111 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
     );
 
   const order: Booking["booking_status"][] = ["pending_approval", "confirmed", "completed"];
-  const sorted = [...bookings].sort(
-    (a, b) => order.indexOf(a.booking_status) - order.indexOf(b.booking_status)
-  );
-  const filtered = query
-    ? sorted.filter((b) => fuzzyMatch(query, `${b.contact_name} ${b.experience_title}`))
-    : sorted;
+  const expTitles = [...new Set(bookings.map((b) => b.experience_title))].filter(Boolean);
+  const filtered = bookings
+    .filter((b) => (statusF ? b.booking_status === statusF : true))
+    .filter((b) => (expF ? b.experience_title === expF : true))
+    .filter((b) => (query ? fuzzyMatch(query, `${b.contact_name} ${b.experience_title}`) : true))
+    .sort((a, b) => order.indexOf(a.booking_status) - order.indexOf(b.booking_status));
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE));
   const pageSafe = Math.min(page, pageCount - 1);
   const items = filtered.slice(pageSafe * PAGE, pageSafe * PAGE + PAGE);
   const active = bookings.find((b) => b.id === modalId) ?? null;
 
+  // group filtered bookings by date for the calendar view
+  const byDate = new Map<string, Booking[]>();
+  for (const b of [...filtered].sort((a, b) => (a.scheduled_time || "").localeCompare(b.scheduled_time || ""))) {
+    const k = b.scheduled_date || "Sin fecha";
+    (byDate.get(k) ?? byDate.set(k, []).get(k)!).push(b);
+  }
+  const dateKeys = [...byDate.keys()].sort();
+
+  const resetPage = () => setPage(0);
+
   return (
     <div className="grid grid-cols-1 gap-3">
-      {bookings.length > 5 && (
-        <SearchBar
-          value={query}
-          onChange={(v) => {
-            setQuery(v);
-            setPage(0);
-          }}
-          placeholder="Buscar por cliente o experiencia…"
-        />
-      )}
-      {items.map((b) => (
+      <div className="grid gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <SearchBar
+              value={query}
+              onChange={(v) => {
+                setQuery(v);
+                resetPage();
+              }}
+              placeholder="Buscar cliente o experiencia…"
+            />
+          </div>
+          <div className="inline-flex shrink-0 rounded-full border border-border p-0.5">
+            {(["list", "calendar"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-sm transition",
+                  view === v ? "bg-ink text-background" : "text-muted-foreground hover:bg-accent"
+                )}
+              >
+                {v === "list" ? "Lista" : "Calendario"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={statusF}
+            onChange={(e) => {
+              setStatusF(e.target.value);
+              resetPage();
+            }}
+            className="h-9 rounded-xl border border-input bg-card px-3 text-sm"
+          >
+            <option value="">Todos los estados</option>
+            <option value="pending_approval">Por aprobar</option>
+            <option value="confirmed">Confirmadas</option>
+            <option value="completed">Completadas</option>
+            <option value="rejected">Rechazadas</option>
+            <option value="cancelled">Canceladas</option>
+          </select>
+          {expTitles.length > 1 && (
+            <select
+              value={expF}
+              onChange={(e) => {
+                setExpF(e.target.value);
+                resetPage();
+              }}
+              className="h-9 max-w-[55%] rounded-xl border border-input bg-card px-3 text-sm"
+            >
+              <option value="">Todas las experiencias</option>
+              {expTitles.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      </div>
+
+      {view === "calendar" ? (
+        filtered.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Sin reservas con estos filtros.</p>
+        ) : (
+          dateKeys.map((k) => (
+            <div key={k} className="rounded-xl border border-border bg-card p-3">
+              <p className="mb-2 text-sm font-medium">{k}</p>
+              <div className="grid gap-2">
+                {byDate.get(k)!.map((b) => (
+                  <BookingRow key={b.id} b={b} onOpen={() => setModalId(b.id)} />
+                ))}
+              </div>
+            </div>
+          ))
+        )
+      ) : (
+        <>
+          {items.map((b) => (
         <button
           key={b.id}
           type="button"
@@ -295,12 +390,14 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
         </button>
       ))}
 
-      {filtered.length === 0 && (
-        <p className="py-6 text-center text-sm text-muted-foreground">
-          Sin resultados para “{query}”.
-        </p>
+          {filtered.length === 0 && (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Sin reservas con estos filtros.
+            </p>
+          )}
+          <Pagination page={pageSafe} pageCount={pageCount} onPage={setPage} />
+        </>
       )}
-      <Pagination page={pageSafe} pageCount={pageCount} onPage={setPage} />
 
       <Modal
         open={!!active}
@@ -387,6 +484,22 @@ function BookingBadge({ status }: { status: Booking["booking_status"] }) {
   return <Badge tone={v.tone}>{v.label}</Badge>;
 }
 
+function BookingRow({ b, onOpen }: { b: Booking; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-2 rounded-lg bg-muted/50 px-2 py-1.5 text-left transition hover:bg-muted"
+    >
+      <span className="shrink-0 font-display text-sm tabular-nums">{b.scheduled_time || "—"}</span>
+      <span className="min-w-0 flex-1 truncate text-sm">
+        {b.contact_name} · {b.experience_title}
+      </span>
+      <BookingBadge status={b.booking_status} />
+    </button>
+  );
+}
+
 // --------------------------------------------------------------------------
 
 export function RevenuePanel() {
@@ -422,13 +535,32 @@ export function RevenuePanel() {
 
 // --------------------------------------------------------------------------
 
-type CalRange = "today" | "week" | "month";
+type CalRange = "today" | "week" | "month" | "custom";
 
 const RANGE_TABS: { k: CalRange; label: string }[] = [
   { k: "today", label: "Hoy" },
   { k: "week", label: "Semana" },
   { k: "month", label: "Mes" },
+  { k: "custom", label: "Rango" },
 ];
+
+/** Monday (ISO) of the week containing `iso`. */
+function mondayOf(iso: string): string {
+  const d = parseISODate(iso);
+  const back = (d.getDay() + 6) % 7; // Monday-first
+  d.setDate(d.getDate() - back);
+  return isoDate(d);
+}
+
+function datesBetween(from: string, to: string, cap = 60): string[] {
+  const out: string[] = [];
+  let cur = from;
+  while (cur <= to && out.length < cap) {
+    out.push(cur);
+    cur = addDaysISO(cur, 1);
+  }
+  return out;
+}
 
 export function CalendarPanel() {
   const experiences = useApp((s) => s.experiences);
@@ -436,6 +568,9 @@ export function CalendarPanel() {
   const [range, setRange] = useState<CalRange>("week");
   const [filterId, setFilterId] = useState<string>(""); // "" = all
   const [modalId, setModalId] = useState<string | null>(null);
+  const [weekStart, setWeekStart] = useState(() => mondayOf(todayISO()));
+  const [from, setFrom] = useState(() => todayISO());
+  const [to, setTo] = useState(() => addDaysISO(todayISO(), 14));
 
   if (!experiences.length)
     return (
@@ -449,6 +584,13 @@ export function CalendarPanel() {
   const modalExp = experiences.find((e) => e.id === modalId) ?? null;
   const selectedExp = filterId ? experiences.find((e) => e.id === filterId) ?? null : null;
   const shown = selectedExp ? [selectedExp] : experiences;
+
+  const weekEnd = addDaysISO(weekStart, 6);
+  const ws = parseISODate(weekStart);
+  const we = parseISODate(weekEnd);
+  const weekLabel = `${ws.getDate()} ${monthName(ws.getMonth()).slice(0, 3)} – ${we.getDate()} ${monthName(
+    we.getMonth()
+  ).slice(0, 3)}`;
 
   return (
     <div className="grid grid-cols-1 gap-3">
@@ -483,8 +625,76 @@ export function CalendarPanel() {
         </div>
       </div>
 
-      {range === "today" && <TodayAgenda experiences={shown} onSelect={setModalId} />}
-      {range === "week" && <WeekAgenda experiences={shown} onSelect={setModalId} />}
+      {range === "today" && (
+        <DatedAgenda experiences={shown} dates={[todayISO()]} onSelect={setModalId} />
+      )}
+
+      {range === "week" && (
+        <>
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              aria-label="Semana anterior"
+              onClick={() => setWeekStart(addDaysISO(weekStart, -7))}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-accent"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeekStart(mondayOf(todayISO()))}
+              className="font-medium capitalize hover:underline"
+            >
+              {weekLabel}
+            </button>
+            <button
+              type="button"
+              aria-label="Semana siguiente"
+              onClick={() => setWeekStart(addDaysISO(weekStart, 7))}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-accent"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+          <DatedAgenda
+            experiences={shown}
+            dates={datesBetween(weekStart, weekEnd, 7)}
+            onSelect={setModalId}
+          />
+        </>
+      )}
+
+      {range === "custom" && (
+        <>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-sm">
+              <span className="mb-1 block text-xs text-muted-foreground">Desde</span>
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="h-9 rounded-xl border border-input bg-card px-3 text-sm"
+              />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-xs text-muted-foreground">Hasta</span>
+              <input
+                type="date"
+                value={to}
+                min={from}
+                onChange={(e) => setTo(e.target.value)}
+                className="h-9 rounded-xl border border-input bg-card px-3 text-sm"
+              />
+            </label>
+          </div>
+          <DatedAgenda
+            experiences={shown}
+            dates={datesBetween(from < to ? from : to, from < to ? to : from)}
+            onSelect={setModalId}
+          />
+        </>
+      )}
+
       {range === "month" &&
         (selectedExp ? (
           <DateCalendar
