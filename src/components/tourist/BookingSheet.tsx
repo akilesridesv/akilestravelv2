@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { PublicExperience } from "@/data/repo";
 import type { Booking, TicketTier } from "@/types/domain";
 import { Modal } from "@/components/ui/modal";
@@ -40,6 +40,12 @@ function dateChip(iso: string): string {
   return `${dn.charAt(0).toUpperCase()}${dn.slice(1)} ${d.getDate()} ${monthName(d.getMonth()).slice(0, 3)}`;
 }
 
+function fullDate(iso: string): string {
+  const d = parseISODate(iso);
+  const dn = dayName(d.getDay());
+  return `${dn.charAt(0).toUpperCase()}${dn.slice(1)} ${d.getDate()} de ${monthName(d.getMonth())}`;
+}
+
 export function BookingSheet({
   experience,
   open,
@@ -75,8 +81,15 @@ export function BookingSheet({
   const [tierId, setTierId] = useState<string | null>(offeredTiers[0]?.id ?? null);
   const tier = offeredTiers.find((t) => t.id === tierId) ?? null;
 
-  const [people, setPeople] = useState(1);
+  // Respect the experience's configured group size: default to the minimum,
+  // and never let the tourist pick below it (or above the departure capacity).
+  const minPeople = Math.max(1, experience.min_capacity || 1);
   const maxPeople = Math.max(1, Math.min(dep?.capacity ?? experience.max_capacity, experience.max_capacity));
+  const floorPeople = Math.min(minPeople, maxPeople);
+  const [people, setPeople] = useState(minPeople);
+  useEffect(() => {
+    setPeople((p) => Math.min(Math.max(p, floorPeople), maxPeople));
+  }, [floorPeople, maxPeople]);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -94,7 +107,7 @@ export function BookingSheet({
     setDate(d);
     const first = departuresOn(deps, d)[0];
     setTime(first?.time ?? "");
-    setPeople(1);
+    setPeople(minPeople);
   }
 
   async function confirm() {
@@ -163,6 +176,12 @@ export function BookingSheet({
             <div className="mt-1 rounded-2xl border border-border p-3">
               <BookingCalendar available={dates} selected={date} onSelect={pickDate} />
             </div>
+            {date && (
+              <p className="mt-2 text-center text-sm">
+                <span className="text-muted-foreground">Fecha seleccionada: </span>
+                <span className="font-medium">{fullDate(date)}</span>
+              </p>
+            )}
           </div>
 
           {/* Times */}
@@ -176,7 +195,7 @@ export function BookingSheet({
                   key={t.time}
                   onClick={() => {
                     setTime(t.time);
-                    setPeople(1);
+                    setPeople(minPeople);
                   }}
                   className={cn(
                     "rounded-xl border px-3 py-1.5 text-sm transition",
@@ -216,30 +235,37 @@ export function BookingSheet({
             </div>
           )}
 
-          {/* People */}
-          <div className="flex items-center justify-between">
-            <Label className="inline-flex items-center gap-1">
-              <Users className="h-3 w-3" /> Personas
-            </Label>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setPeople((p) => Math.max(1, p - 1))}
-                disabled={people <= 1}
-                aria-label="Menos"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-border disabled:opacity-40"
-              >
-                <Minus className="h-4 w-4" />
-              </button>
-              <span className="w-6 text-center font-display text-lg">{people}</span>
-              <button
-                onClick={() => setPeople((p) => Math.min(maxPeople, p + 1))}
-                disabled={people >= maxPeople}
-                aria-label="Más"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-border disabled:opacity-40"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
+          {/* People — respects the experience's min/max group size */}
+          <div>
+            <div className="flex items-center justify-between">
+              <Label className="inline-flex items-center gap-1">
+                <Users className="h-3 w-3" /> Personas
+              </Label>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setPeople((p) => Math.max(floorPeople, p - 1))}
+                  disabled={people <= floorPeople}
+                  aria-label="Menos"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border disabled:opacity-40"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <span className="w-6 text-center font-display text-lg">{people}</span>
+                <button
+                  onClick={() => setPeople((p) => Math.min(maxPeople, p + 1))}
+                  disabled={people >= maxPeople}
+                  aria-label="Más"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border disabled:opacity-40"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
             </div>
+            {minPeople > 1 && (
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Esta experiencia requiere mínimo {minPeople} personas.
+              </p>
+            )}
           </div>
 
           {/* Price breakdown */}
