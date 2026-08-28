@@ -43,7 +43,9 @@ export function Markdown({ text }: { text: string }) {
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) {
-      flush();
+      // A blank line inside a list is kept as-is (don't split consecutive items,
+      // otherwise every numbered item restarts at "1.").
+      if (!list) flush();
       continue;
     }
     const heading = line.match(/^#{1,6}\s+(.*)$/);

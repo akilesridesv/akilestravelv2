@@ -30,8 +30,17 @@ import { ProfilePanel, PreferencesPanel } from "@/components/provider/ProfilePan
 import { Markdown } from "@/components/ui/Markdown";
 import { useApp } from "@/state/store";
 import { experienceToDraft } from "@/lib/experience";
-import { uid } from "@/lib/utils";
-import { ArrowUp, Sparkles, ImagePlus, Loader2 } from "lucide-react";
+import { uid, cn } from "@/lib/utils";
+import {
+  ArrowUp,
+  Sparkles,
+  ImagePlus,
+  Loader2,
+  MessageSquare,
+  ChevronDown,
+  Plus,
+  Trash2,
+} from "lucide-react";
 
 // Monotonic client timestamps so a user message and its reply keep their order
 // even when saved within the same millisecond.
@@ -84,6 +93,10 @@ export function CopilotSurface({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [conversations, setConversations] = useState<repo.Conversation[]>([]);
+  const [convId, setConvId] = useState<string | null>(null);
+  const convIdRef = useRef<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadingImgs, setUploadingImgs] = useState(false);
@@ -128,30 +141,57 @@ export function CopilotSurface({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
 
-  // Load persisted chat history for this provider (Supabase).
+  const convEnabled = isSupabaseConfigured && !!user;
   useEffect(() => {
-    if (!isSupabaseConfigured || !user) return;
+    convIdRef.current = convId;
+  }, [convId]);
+
+  // Load this user's conversations; create one if they have none.
+  useEffect(() => {
+    if (!convEnabled || !user) return;
+    let alive = true;
+    (async () => {
+      try {
+        let convs = await repo.loadConversations(user.id);
+        if (!convs.length) convs = [await repo.createConversation(user.id)];
+        if (!alive) return;
+        setConversations(convs);
+        setConvId((cur) => cur ?? convs[0].id);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [user?.id, convEnabled]);
+
+  // Load the messages of the active conversation.
+  useEffect(() => {
+    if (!convEnabled || !convId) return;
     let alive = true;
     repo
-      .loadMessages(user.id)
+      .loadMessages(convId)
       .then((rows) => {
-        if (alive && rows.length)
+        if (alive)
           setMessages(rows.map((r) => ({ id: r.id, role: r.role, blocks: r.blocks as Block[] })));
       })
       .catch(console.error);
     return () => {
       alive = false;
     };
-  }, [user?.id]);
+  }, [convId, convEnabled]);
 
   function push(role: Message["role"], blocks: Block[]) {
     const msg: Message = { id: uid("msg"), role, blocks };
     setMessages((m) => [...m, msg]);
-    if (isSupabaseConfigured && user) {
+    const cid = convIdRef.current;
+    if (convEnabled && user && cid) {
       void repo
         .saveMessage({
           id: msg.id,
           user_id: user.id,
+          conversation_id: cid,
           role,
           blocks: blocks as unknown[],
           created_at: monoIso(),
@@ -160,17 +200,83 @@ export function CopilotSurface({
     }
   }
 
+  async function newChat() {
+    if (!convEnabled || !user) return;
+    try {
+      const c = await repo.createConversation(user.id);
+      setConversations((cs) => [c, ...cs]);
+      setConvId(c.id);
+      setMessages([]);
+      setMenuOpen(false);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function switchChat(id: string) {
+    setConvId(id);
+    setMenuOpen(false);
+  }
+
+  async function deleteChat(id: string) {
+    if (!convEnabled || !user) return;
+    try {
+      await repo.deleteConversation(id);
+      const remaining = conversations.filter((c) => c.id !== id);
+      setConversations(remaining);
+      if (convId === id) {
+        if (remaining.length) setConvId(remaining[0].id);
+        else {
+          const c = await repo.createConversation(user.id);
+          setConversations([c]);
+          setConvId(c.id);
+          setMessages([]);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   async function handleSend(text: string) {
     const value = text.trim();
     if (!value || busy) return;
+    const firstInConv = messages.length === 0;
     setInput("");
     push("user", [{ type: "text", text: value }]);
+    const cid = convIdRef.current;
+    if (convEnabled && cid) {
+      if (firstInConv) {
+        const title = value.length > 48 ? value.slice(0, 48) + "…" : value;
+        void repo.renameConversation(cid, title).catch(console.error);
+        setConversations((cs) => cs.map((c) => (c.id === cid ? { ...c, title } : c)));
+      } else {
+        void repo.touchConversation(cid).catch(console.error);
+      }
+    }
     setBusy(true);
 
     try {
-      // The LLM (Gemini) handles anything the rule-based classifier doesn't
-      // recognize on its own — i.e. before the context fallback would absorb it.
-      if (isLLMEnabled && classifyIntent(value) === "unknown") {
+      // The LLM (Gemini) handles: (a) anything the rule-based classifier doesn't
+      // recognize on its own, and (b) QUESTIONS that the command-heuristic would
+      // otherwise misread as an action (e.g. "¿qué experiencias debería subir?").
+      const baseIntent = classifyIntent(value);
+      const isQuestion =
+        /\?/.test(value) ||
+        /^\s*(qu[eé]|cu[aá]l(es)?|c[oó]mo|por\s?qu[eé]|cu[aá]ndo|d[oó]nde|qui[eé]n|cu[aá]nto|deber[ií]a|recomi[eé]nda|me conviene|conviene|vale la pena|puedo|podr[ií]a|es mejor|necesito saber|expl[ií]ca)\b/i.test(
+          value.trim()
+        );
+      const actionIntents = new Set<string>([
+        "create_experience",
+        "edit_experience",
+        "manage_calendar",
+        "manage_tiers",
+        "set_deadline",
+        "share_experience",
+      ]);
+      const preferLLM =
+        isLLMEnabled && (baseIntent === "unknown" || (isQuestion && actionIntents.has(baseIntent)));
+      if (preferLLM) {
         try {
           const history: ChatTurn[] = messages.flatMap((m) => {
             const tb = m.blocks.find((b) => b.type === "text") as
@@ -520,8 +626,76 @@ export function CopilotSurface({
       profile: "Ej. “mi WhatsApp es 7777-8888”…",
     } as Record<string, string>)[context ?? ""] ?? "Escribe a tu copiloto…";
 
+  const currentTitle = conversations.find((c) => c.id === convId)?.title || "Chat";
+
   return (
     <div className="flex h-full flex-col">
+      {/* Conversation switcher */}
+      {convEnabled && (
+        <div className="relative z-20 shrink-0 border-b border-border bg-background/80 backdrop-blur">
+          <div className="mx-auto flex max-w-2xl items-center gap-2 px-3 py-2 sm:px-4">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((o) => !o)}
+              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1 text-left transition hover:bg-accent"
+            >
+              <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="truncate text-sm font-medium">{currentTitle}</span>
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                  menuOpen && "rotate-180"
+                )}
+              />
+            </button>
+            <button
+              type="button"
+              onClick={newChat}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs transition hover:bg-accent"
+            >
+              <Plus className="h-3.5 w-3.5" /> Nuevo
+            </button>
+          </div>
+
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+              <div className="absolute inset-x-0 top-full z-20 mx-auto max-w-2xl border-b border-border bg-card px-2 pb-2 shadow-lg">
+                <div className="max-h-64 overflow-y-auto py-1">
+                  {conversations.map((c) => (
+                    <div
+                      key={c.id}
+                      className={cn(
+                        "group flex items-center gap-2 rounded-lg px-2 py-1.5",
+                        c.id === convId ? "bg-accent" : "hover:bg-accent"
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => switchChat(c.id)}
+                        className="min-w-0 flex-1 truncate text-left text-sm"
+                      >
+                        {c.title || "Nuevo chat"}
+                      </button>
+                      {conversations.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => deleteChat(c.id)}
+                          aria-label="Eliminar chat"
+                          className="shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Message stream */}
       <div ref={scrollRef} className="no-scrollbar flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         {empty ? (

@@ -429,7 +429,14 @@ export async function updateBookingStatus(id: string, status: Booking["booking_s
   if (error) throw error;
 }
 
-// --- copilot chat history ---------------------------------------------------
+// --- copilot chat: conversations + messages ---------------------------------
+
+export interface Conversation {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface StoredMessage {
   id: string;
@@ -437,22 +444,64 @@ export interface StoredMessage {
   blocks: unknown[];
 }
 
-export async function loadMessages(userId: string): Promise<StoredMessage[]> {
+function mapConversation(r: any): Conversation {
+  return { id: r.id, title: r.title, created_at: r.created_at, updated_at: r.updated_at };
+}
+
+export async function loadConversations(userId: string): Promise<Conversation[]> {
+  const { data, error } = await sb()
+    .from("chat_conversations")
+    .select("*")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapConversation);
+}
+
+export async function createConversation(userId: string, title = "Nuevo chat"): Promise<Conversation> {
+  const { data, error } = await sb()
+    .from("chat_conversations")
+    .insert({ user_id: userId, title })
+    .select()
+    .single();
+  if (error) throw error;
+  return mapConversation(data);
+}
+
+export async function renameConversation(id: string, title: string): Promise<void> {
+  const { error } = await sb()
+    .from("chat_conversations")
+    .update({ title, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function touchConversation(id: string): Promise<void> {
+  await sb().from("chat_conversations").update({ updated_at: new Date().toISOString() }).eq("id", id);
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+  const { error } = await sb().from("chat_conversations").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function loadMessages(conversationId: string): Promise<StoredMessage[]> {
   const { data, error } = await sb()
     .from("copilot_messages")
     .select("id, role, blocks")
-    .eq("user_id", userId)
+    .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });
   if (error) throw error;
   return (data ?? []).map((r) => ({ id: r.id, role: r.role, blocks: r.blocks ?? [] }));
 }
 
 export async function saveMessage(
-  m: StoredMessage & { user_id: string; created_at?: string }
+  m: StoredMessage & { user_id: string; conversation_id: string; created_at?: string }
 ): Promise<void> {
   const { error } = await sb().from("copilot_messages").insert({
     id: m.id,
     user_id: m.user_id,
+    conversation_id: m.conversation_id,
     role: m.role,
     blocks: m.blocks,
     ...(m.created_at ? { created_at: m.created_at } : {}),
