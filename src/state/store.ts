@@ -46,6 +46,7 @@ interface AppState {
   removeExperience: (id: string) => void;
 
   // booking actions
+  addBooking: (b: Booking) => void;
   setBookingStatus: (id: string, status: Booking["booking_status"]) => void;
 }
 
@@ -187,6 +188,8 @@ export const useApp = create<AppState>()(
         set({ experiences: get().experiences.filter((e) => e.id !== id) });
         if (remote) void repo.deleteExperience(id).catch(console.error);
       },
+
+      addBooking: (b) => set({ bookings: [b, ...get().bookings] }),
 
       setBookingStatus: (id, status) => {
         set({

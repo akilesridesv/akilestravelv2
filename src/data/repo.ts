@@ -258,6 +258,138 @@ export async function deleteExperience(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// --- public (tourist) reads -------------------------------------------------
+
+export interface PublicExperience extends Experience {
+  provider?: ProviderProfile;
+}
+
+async function loadChildren(ids: string[]) {
+  const c = sb();
+  const [sch, tiers, ds] = await Promise.all([
+    c.from("recurring_schedules").select("*").in("activity_id", ids),
+    c.from("ticket_tiers").select("*").in("activity_id", ids),
+    c.from("date_slots").select("*").in("activity_id", ids),
+  ]);
+  return { sch: sch.data ?? [], tiers: tiers.data ?? [], ds: ds.data ?? [] };
+}
+
+/** All published + active experiences from approved providers (RLS-enforced). */
+export async function loadPublishedExperiences(): Promise<PublicExperience[]> {
+  const c = sb();
+  const { data: acts, error } = await c
+    .from("activities")
+    .select("*")
+    .eq("is_active", true)
+    .eq("publication_status", "published")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  if (!acts?.length) return [];
+
+  const ids = acts.map((a) => a.id);
+  const provIds = [...new Set(acts.map((a) => a.provider_profile_id).filter(Boolean))];
+  const [{ sch, tiers, ds }, provs] = await Promise.all([
+    loadChildren(ids),
+    provIds.length
+      ? c.from("provider_profiles").select("*").in("id", provIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const provMap = new Map((provs.data ?? []).map((r: any) => [r.id, mapProvider(r)]));
+  return acts.map((a) => ({
+    ...assemble(a, sch, tiers, ds),
+    provider: a.provider_profile_id ? provMap.get(a.provider_profile_id) : undefined,
+  }));
+}
+
+/** A single published experience with its provider, for the detail page. */
+export async function loadPublishedExperience(id: string): Promise<PublicExperience | null> {
+  const c = sb();
+  const { data: a, error } = await c
+    .from("activities")
+    .select("*")
+    .eq("id", id)
+    .eq("is_active", true)
+    .eq("publication_status", "published")
+    .maybeSingle();
+  if (error) throw error;
+  if (!a) return null;
+
+  const { sch, tiers, ds } = await loadChildren([a.id]);
+  let provider: ProviderProfile | undefined;
+  if (a.provider_profile_id) {
+    const { data: p } = await c
+      .from("provider_profiles")
+      .select("*")
+      .eq("id", a.provider_profile_id)
+      .maybeSingle();
+    if (p) provider = mapProvider(p);
+  }
+  return { ...assemble(a, sch, tiers, ds), provider };
+}
+
+/** A provider's public profile plus their published experiences (/p/:id). */
+export async function loadProviderPublicById(
+  providerId: string
+): Promise<{ provider: ProviderProfile; experiences: PublicExperience[] } | null> {
+  const c = sb();
+  const { data: p } = await c
+    .from("provider_profiles")
+    .select("*")
+    .eq("id", providerId)
+    .maybeSingle();
+  if (!p) return null;
+  const provider = mapProvider(p);
+
+  const { data: acts } = await c
+    .from("activities")
+    .select("*")
+    .eq("provider_profile_id", providerId)
+    .eq("is_active", true)
+    .eq("publication_status", "published")
+    .order("created_at", { ascending: false });
+  const list = acts ?? [];
+  if (!list.length) return { provider, experiences: [] };
+
+  const { sch, tiers, ds } = await loadChildren(list.map((a) => a.id));
+  const experiences = list.map((a) => ({ ...assemble(a, sch, tiers, ds), provider }));
+  return { provider, experiences };
+}
+
+export interface NewBooking {
+  activity_id: string;
+  contact_name: string;
+  contact_email: string;
+  number_of_people: number;
+  scheduled_date: string;
+  scheduled_time: string;
+  subtotal: number;
+  service_fee: number;
+  total: number;
+  status: Booking["booking_status"];
+  confirmation_code: string;
+}
+
+/** Create a booking as an anonymous tourist (user_id null — allowed by RLS). */
+export async function createBooking(b: NewBooking): Promise<void> {
+  // No .select() back: anon cannot read bookings under RLS, and we already hold
+  // the confirmation code client-side.
+  const { error } = await sb().from("bookings").insert({
+    activity_id: b.activity_id,
+    user_id: null,
+    contact_name: b.contact_name,
+    contact_email: b.contact_email,
+    number_of_people: b.number_of_people,
+    scheduled_date: b.scheduled_date,
+    scheduled_time: b.scheduled_time,
+    booking_status: b.status,
+    confirmation_code: b.confirmation_code,
+    subtotal_paid: b.subtotal,
+    service_fee_paid: b.service_fee,
+    total_paid: b.total,
+  });
+  if (error) throw error;
+}
+
 // --- bookings ---------------------------------------------------------------
 
 function mapBooking(r: any): Booking {
