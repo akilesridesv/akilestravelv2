@@ -223,11 +223,14 @@ export function ExperienceDraftEditor({
           </Label>
           <Input
             value={d.location_address ?? ""}
-            placeholder="Dirección escrita o link de Google Maps"
+            placeholder="Dirección, coordenadas (13.6989,-89.1914) o link de Google Maps"
             onChange={(e) => set("location_address", e.target.value)}
           />
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Puede ser una dirección o un enlace de mapa. El turista lo verá (con mapa) en la ficha.
+            Para que el mapa marque el punto exacto, pega las <b>coordenadas</b> o un enlace que las
+            incluya. En Google Maps: clic derecho sobre el punto → clic en las coordenadas para
+            copiarlas, o copia el enlace de la barra de direcciones (el que trae “@13.69,-89.19”).
+            Un link corto “maps.app.goo.gl” abre el punto, pero no lo marca dentro del mapa.
           </p>
         </div>
 

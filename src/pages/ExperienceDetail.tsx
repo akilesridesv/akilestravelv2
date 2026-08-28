@@ -316,16 +316,52 @@ function ensureHttp(u: string): string {
   return /^https?:\/\//i.test(u) ? u : `https://${u}`;
 }
 
+/** Pull lat,lng out of a full Maps URL (@lat,lng / q= / !3d!4d) or bare coords. */
+function parseLatLng(input?: string): { lat: number; lng: number } | null {
+  if (!input) return null;
+  const s = decodeURIComponent(input.trim());
+  const patterns = [
+    /@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/,
+    /[?&](?:q|query|ll|center|destination|daddr)=(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/i,
+    /!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/,
+    /^\s*(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$/,
+  ];
+  for (const re of patterns) {
+    const m = s.match(re);
+    if (m) {
+      const lat = parseFloat(m[1]);
+      const lng = parseFloat(m[2]);
+      if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng };
+    }
+  }
+  return null;
+}
+
 function MeetingPoint({ exp }: { exp: PublicExperience }) {
   const mp = exp.location_address?.trim();
+  const coords = parseLatLng(mp);
   const link = isLink(mp) ? ensureHttp(mp!) : undefined;
-  const written = mp && !link ? mp : "";
-  const label = written || [exp.area, exp.city].filter(Boolean).join(", ");
-  const query = encodeURIComponent(
-    written || [exp.area, exp.city, "El Salvador"].filter(Boolean).join(", ")
-  );
-  const hasMap = query.length > 0;
-  const openHref = link ?? `https://www.google.com/maps/search/?api=1&query=${query}`;
+  const written = mp && !link && !coords ? mp : "";
+
+  const cityLabel = [exp.area, exp.city].filter(Boolean).join(", ");
+  const label =
+    written || cityLabel || (coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : "");
+
+  // Exact pin when we have coordinates; otherwise search by the written address
+  // or the city. Short goo.gl links can't be pinned in-frame — the button opens
+  // the exact spot instead.
+  const embedSrc = coords
+    ? `https://www.google.com/maps?q=${coords.lat},${coords.lng}&z=16&output=embed`
+    : `https://www.google.com/maps?q=${encodeURIComponent(
+        written || cityLabel || "El Salvador"
+      )}&output=embed`;
+  const openHref =
+    link ??
+    (coords
+      ? `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+          written || cityLabel || "El Salvador"
+        )}`);
 
   return (
     <section className="mt-8">
@@ -335,17 +371,15 @@ function MeetingPoint({ exp }: { exp: PublicExperience }) {
         {label || "El proveedor compartirá el punto exacto al confirmar."}
       </p>
 
-      {hasMap && (
-        <div className="mt-3 overflow-hidden rounded-2xl border border-border">
-          <iframe
-            title="Mapa del punto de encuentro"
-            src={`https://www.google.com/maps?q=${query}&output=embed`}
-            className="h-56 w-full"
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
-        </div>
-      )}
+      <div className="mt-3 overflow-hidden rounded-2xl border border-border">
+        <iframe
+          title="Mapa del punto de encuentro"
+          src={embedSrc}
+          className="h-56 w-full"
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+        />
+      </div>
 
       <a
         href={openHref}
