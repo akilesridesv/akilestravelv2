@@ -108,6 +108,7 @@ function assemble(a: any, sch: any[], tiers: any[], ds: any[]): Experience {
     publication_status: a.publication_status,
     is_active: a.is_active,
     registration_deadline_hours: a.registration_deadline_hours ?? 12,
+    cancellation_policy: a.cancellation_policy ?? undefined,
     event_date: a.event_date ?? undefined,
     schedules: sch
       .filter((s) => s.activity_id === a.id)
@@ -193,6 +194,7 @@ export async function saveExperience(exp: Experience, providerId?: string): Prom
     publication_status: exp.publication_status,
     is_active: exp.is_active,
     registration_deadline_hours: exp.registration_deadline_hours,
+    cancellation_policy: exp.cancellation_policy ?? null,
     event_date: exp.event_date ?? null,
   };
   const up = await c.from("activities").upsert(row);

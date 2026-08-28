@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Experience, ExperienceDraft } from "@/types/domain";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,10 @@ import {
   Ticket,
   Timer,
   ChevronDown,
+  Plus,
+  Backpack,
+  ListChecks,
+  Ban,
 } from "lucide-react";
 
 /**
@@ -52,6 +56,11 @@ export function ExperienceDraftEditor({
   const [d, setD] = useState<ExperienceDraft>(initial);
   const [published, setPublished] = useState(false);
   const [showDates, setShowDates] = useState((initial.date_slots ?? []).length > 0);
+  const [showDetails, setShowDetails] = useState(() =>
+    [initial.highlights, initial.whats_included, initial.whats_not_included, initial.what_to_bring].some(
+      (a) => (a ?? []).length > 0
+    )
+  );
 
   // Consume images uploaded from the chat composer's "add images" button and
   // append them to this draft (first mounted editor wins — consume is atomic).
@@ -247,6 +256,58 @@ export function ExperienceDraftEditor({
           </div>
         </div>
 
+        {/* Detalles para el turista (todo el detalle, editable) */}
+        <div className="sm:col-span-2">
+          <button
+            type="button"
+            onClick={() => setShowDetails((s) => !s)}
+            className="flex w-full items-center gap-1.5 text-left"
+          >
+            <ListChecks className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground">
+              Detalles para el turista: highlights, incluye, no incluye, qué llevar
+            </span>
+            <ChevronDown
+              className={cn(
+                "ml-auto h-4 w-4 text-muted-foreground transition-transform",
+                showDetails && "rotate-180"
+              )}
+            />
+          </button>
+          {showDetails && (
+            <div className="mt-2 grid gap-4 rounded-xl border border-border p-3">
+              <ListField
+                label="Lo que vivirás (highlights)"
+                icon={<Sparkles className="h-3 w-3 text-primary" />}
+                value={d.highlights}
+                onChange={(v) => set("highlights", v)}
+                placeholder="Ej. Vista panorámica de San Salvador"
+              />
+              <ListField
+                label="Incluye"
+                icon={<Check className="h-3 w-3 text-emerald-600" />}
+                value={d.whats_included}
+                onChange={(v) => set("whats_included", v)}
+                placeholder="Ej. Scooter, casco y guía"
+              />
+              <ListField
+                label="No incluye"
+                icon={<Ban className="h-3 w-3 text-muted-foreground" />}
+                value={d.whats_not_included}
+                onChange={(v) => set("whats_not_included", v)}
+                placeholder="Ej. Alimentos y bebidas"
+              />
+              <ListField
+                label="Qué llevar"
+                icon={<Backpack className="h-3 w-3 text-primary" />}
+                value={d.what_to_bring}
+                onChange={(v) => set("what_to_bring", v)}
+                placeholder="Ej. Ropa cómoda, agua y protector solar"
+              />
+            </div>
+          )}
+        </div>
+
         {/* Tiers */}
         <div className="sm:col-span-2">
           <Label className="inline-flex items-center gap-1">
@@ -309,6 +370,20 @@ export function ExperienceDraftEditor({
             onChange={(h) => set("registration_deadline_hours", h)}
           />
         </div>
+
+        <div className="sm:col-span-2">
+          <Label className="inline-flex items-center gap-1">
+            <Ban className="h-3 w-3" /> Política de cancelación
+          </Label>
+          <Input
+            value={d.cancellation_policy ?? ""}
+            placeholder="Ej. Cancelación gratuita hasta 24 horas antes"
+            onChange={(e) => set("cancellation_policy", e.target.value)}
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Si lo dejas vacío, mostramos una política estándar según tu anticipación mínima.
+          </p>
+        </div>
       </div>
 
       <div className="flex flex-col gap-2 border-t border-border p-4 sm:flex-row sm:items-center">
@@ -336,5 +411,71 @@ function Dot() {
       title="Valor asumido — revísalo"
       className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400"
     />
+  );
+}
+
+/** Editable bullet list: type an item + Enter (or +) to add; remove with ✕. */
+function ListField({
+  label,
+  icon,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  icon: ReactNode;
+  value: string[];
+  onChange: (v: string[]) => void;
+  placeholder?: string;
+}) {
+  const [text, setText] = useState("");
+  function add() {
+    const t = text.trim();
+    if (!t) return;
+    onChange([...value, t]);
+    setText("");
+  }
+  return (
+    <div>
+      <Label className="inline-flex items-center gap-1">
+        {icon} {label}
+      </Label>
+      <div className="mt-1 flex gap-2">
+        <Input
+          value={text}
+          placeholder={placeholder}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <Button type="button" variant="outline" size="sm" onClick={add} aria-label="Agregar">
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+      {value.length > 0 && (
+        <ul className="mt-2 grid gap-1">
+          {value.map((it, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm"
+            >
+              <span className="min-w-0 flex-1">{it}</span>
+              <button
+                type="button"
+                onClick={() => onChange(value.filter((_, x) => x !== i))}
+                aria-label="Quitar"
+                className="shrink-0 text-muted-foreground hover:text-destructive"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

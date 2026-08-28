@@ -24,7 +24,11 @@ import {
   Timer,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Star,
+  ShieldCheck,
+  Ban,
+  ClipboardCheck,
 } from "lucide-react";
 
 function fmtDate(iso: string): string {
@@ -103,30 +107,44 @@ export default function ExperienceDetail() {
             {/* Provider */}
             {exp.provider && <ProviderStrip provider={exp.provider} verified={verified} />}
 
-            {exp.description && (
-              <p className="mt-6 whitespace-pre-line text-[15px] leading-relaxed text-foreground/90">
-                {exp.description}
-              </p>
+            {exp.description && <Description text={exp.description} />}
+
+            {exp.highlights?.length > 0 && (
+              <DetailCard icon={<Sparkles className="h-5 w-5 text-primary" />} title="Lo que vivirás">
+                <Bullets items={exp.highlights} icon={<Sparkles className="h-4 w-4 text-primary" />} />
+              </DetailCard>
             )}
 
-            <ListSection icon={<Sparkles className="h-4 w-4 text-primary" />} title="Lo que vivirás" items={exp.highlights} />
-            <ListSection icon={<Check className="h-4 w-4 text-emerald-600" />} title="Incluye" items={exp.whats_included} />
-            <ListSection icon={<X className="h-4 w-4 text-muted-foreground" />} title="No incluye" items={exp.whats_not_included} muted />
-            <ListSection icon={<Backpack className="h-4 w-4 text-primary" />} title="Qué llevar" items={exp.what_to_bring} />
+            {(exp.whats_included?.length > 0 || exp.whats_not_included?.length > 0) && (
+              <DetailCard icon={<ClipboardCheck className="h-5 w-5 text-primary" />} title="Qué incluye">
+                <div className="grid gap-5 sm:grid-cols-2">
+                  {exp.whats_included?.length > 0 && (
+                    <div>
+                      <h3 className="mb-2 text-sm font-semibold text-emerald-700">Incluye</h3>
+                      <Bullets items={exp.whats_included} icon={<Check className="h-4 w-4 text-emerald-600" />} oneCol />
+                    </div>
+                  )}
+                  {exp.whats_not_included?.length > 0 && (
+                    <div>
+                      <h3 className="mb-2 text-sm font-semibold text-muted-foreground">No incluye</h3>
+                      <Bullets items={exp.whats_not_included} icon={<X className="h-4 w-4 text-muted-foreground" />} muted oneCol />
+                    </div>
+                  )}
+                </div>
+              </DetailCard>
+            )}
 
-            {/* Meeting point + map */}
+            {exp.what_to_bring?.length > 0 && (
+              <DetailCard icon={<Backpack className="h-5 w-5 text-primary" />} title="Qué llevar">
+                <Bullets items={exp.what_to_bring} icon={<Backpack className="h-4 w-4 text-primary" />} />
+              </DetailCard>
+            )}
+
             <MeetingPoint exp={exp} />
 
-            {/* Reviews (placeholder until the review system ships) */}
-            <Reviews />
+            <PolicyCard exp={exp} verified={verified} />
 
-            {/* Policy — trust */}
-            <section className="mt-8 grid gap-2 rounded-2xl border border-border p-4 sm:grid-cols-2">
-              <Trust icon={<Timer className="h-4 w-4" />} text={deadlineText(exp.registration_deadline_hours)} />
-              <Trust icon={<BadgeCheck className="h-4 w-4" />} text={verified ? "Proveedor verificado por Akiles" : "En proceso de verificación"} />
-              <Trust icon={<Users className="h-4 w-4" />} text={`Grupos de ${exp.min_capacity} a ${exp.max_capacity} personas`} />
-              <Trust icon={<Clock className="h-4 w-4" />} text={`Duración ${exp.duration_hours} horas`} />
-            </section>
+            <Reviews />
           </div>
 
           {/* Right: booking card (sticky on desktop) */}
@@ -273,30 +291,129 @@ function ProviderStrip({
   );
 }
 
-function ListSection({
+function DetailCard({
   icon,
   title,
-  items,
-  muted,
+  children,
 }: {
   icon: React.ReactNode;
   title: string;
-  items: string[];
-  muted?: boolean;
+  children: React.ReactNode;
 }) {
-  if (!items?.length) return null;
   return (
-    <section className="mt-8">
-      <h2 className="mb-2 font-display text-xl">{title}</h2>
-      <ul className="grid gap-1.5">
-        {items.map((it, idx) => (
-          <li key={idx} className={cn("flex items-start gap-2 text-[15px]", muted && "text-muted-foreground")}>
-            <span className="mt-0.5">{icon}</span>
+    <section className="mt-5 rounded-2xl border border-border bg-card p-4 sm:p-5">
+      <h2 className="mb-3 inline-flex items-center gap-2 font-display text-lg">
+        {icon}
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+function Bullets({
+  items,
+  icon,
+  muted,
+  oneCol,
+}: {
+  items: string[];
+  icon: React.ReactNode;
+  muted?: boolean;
+  oneCol?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const LIMIT = 6;
+  const shown = open ? items : items.slice(0, LIMIT);
+  return (
+    <>
+      <ul className={cn("grid gap-2", !oneCol && "sm:grid-cols-2")}>
+        {shown.map((it, i) => (
+          <li key={i} className={cn("flex items-start gap-2 text-[15px]", muted && "text-muted-foreground")}>
+            <span className="mt-0.5 shrink-0">{icon}</span>
             <span>{it}</span>
           </li>
         ))}
       </ul>
-    </section>
+      {items.length > LIMIT && (
+        <MoreButton open={open} onClick={() => setOpen((o) => !o)} moreLabel={`Ver ${items.length - LIMIT} más`} />
+      )}
+    </>
+  );
+}
+
+function MoreButton({
+  open,
+  onClick,
+  moreLabel = "Ver más",
+  lessLabel = "Ver menos",
+}: {
+  open: boolean;
+  onClick: () => void;
+  moreLabel?: string;
+  lessLabel?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-ink transition hover:opacity-70"
+    >
+      {open ? lessLabel : moreLabel}
+      <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
+    </button>
+  );
+}
+
+function Description({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 300;
+  return (
+    <div className="mt-6">
+      <p
+        className={cn(
+          "whitespace-pre-line text-[15px] leading-relaxed text-foreground/90",
+          !open && long && "line-clamp-4"
+        )}
+      >
+        {text}
+      </p>
+      {long && <MoreButton open={open} onClick={() => setOpen((o) => !o)} moreLabel="Ver más" lessLabel="Ver menos" />}
+    </div>
+  );
+}
+
+function humanHours(h: number): string {
+  if (!h) return "el mismo día";
+  if (h % 24 === 0) {
+    const d = h / 24;
+    return `${d} día${d === 1 ? "" : "s"}`;
+  }
+  return `${h} horas`;
+}
+
+function PolicyCard({ exp, verified }: { exp: PublicExperience; verified: boolean }) {
+  const cancellation =
+    exp.cancellation_policy?.trim() ||
+    (exp.registration_deadline_hours
+      ? `Cancelación gratuita hasta ${humanHours(exp.registration_deadline_hours)} antes del inicio.`
+      : "Cancelación gratuita el mismo día.");
+  return (
+    <DetailCard icon={<ShieldCheck className="h-5 w-5 text-primary" />} title="Todo lo que debes saber">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Trust icon={<Timer className="h-4 w-4" />} text={deadlineText(exp.registration_deadline_hours)} />
+        <Trust icon={<Ban className="h-4 w-4" />} text={cancellation} />
+        <Trust
+          icon={<BadgeCheck className="h-4 w-4" />}
+          text={verified ? "Proveedor verificado por Akiles" : "En proceso de verificación"}
+        />
+        <Trust icon={<Users className="h-4 w-4" />} text={`Grupos de ${exp.min_capacity} a ${exp.max_capacity} personas`} />
+        <Trust icon={<Clock className="h-4 w-4" />} text={`Duración ${exp.duration_hours} horas`} />
+        {exp.languages?.length > 0 && (
+          <Trust icon={<Languages className="h-4 w-4" />} text={`Idiomas: ${exp.languages.join(", ")}`} />
+        )}
+      </div>
+    </DetailCard>
   );
 }
 
@@ -364,8 +481,10 @@ function MeetingPoint({ exp }: { exp: PublicExperience }) {
         )}`);
 
   return (
-    <section className="mt-8">
-      <h2 className="mb-2 font-display text-xl">Punto de encuentro</h2>
+    <section className="mt-5 rounded-2xl border border-border bg-card p-4 sm:p-5">
+      <h2 className="mb-2 inline-flex items-center gap-2 font-display text-lg">
+        <MapPin className="h-5 w-5 text-primary" /> Punto de encuentro
+      </h2>
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <MapPin className="h-4 w-4 text-primary" />
         {label || "El proveedor compartirá el punto exacto al confirmar."}
@@ -395,9 +514,11 @@ function MeetingPoint({ exp }: { exp: PublicExperience }) {
 
 function Reviews() {
   return (
-    <section className="mt-8">
-      <h2 className="mb-2 font-display text-xl">Reseñas</h2>
-      <div className="flex items-center gap-3 rounded-2xl border border-border p-4">
+    <section className="mt-5 rounded-2xl border border-border bg-card p-4 sm:p-5">
+      <h2 className="mb-3 inline-flex items-center gap-2 font-display text-lg">
+        <Star className="h-5 w-5 text-primary" /> Reseñas
+      </h2>
+      <div className="flex items-center gap-3 rounded-xl bg-secondary/50 p-4">
         <div className="flex">
           {[0, 1, 2, 3, 4].map((i) => (
             <Star key={i} className="h-4 w-4 text-muted-foreground/35" />

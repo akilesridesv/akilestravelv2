@@ -77,10 +77,13 @@ export function draftToPatch(d: ExperienceDraft): Partial<Experience> {
     schedules: d.schedules,
     highlights: d.highlights,
     whats_included: d.whats_included,
+    whats_not_included: d.whats_not_included,
+    what_to_bring: d.what_to_bring,
     image_urls: d.image_urls,
     featured_image: d.featured_image,
     tiers: d.tiers,
     date_slots: d.date_slots,
     registration_deadline_hours: d.registration_deadline_hours,
+    cancellation_policy: d.cancellation_policy,
   };
 }

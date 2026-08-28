@@ -159,6 +159,7 @@ export interface Experience {
   publication_status: PublicationStatus;
   is_active: boolean;
   registration_deadline_hours: number;
+  cancellation_policy?: string; // free-text cancellation terms shown to tourists
   event_date?: string; // only for listing_type === "event"
   schedules: RecurringSchedule[];
   date_slots?: DateSlot[]; // concrete per-date availability (date calendar)
