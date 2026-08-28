@@ -147,6 +147,7 @@ export interface Experience {
   languages: string[];
   category?: string;
   // location
+  country?: string;
   city?: string;
   area?: string;
   location_address?: string;

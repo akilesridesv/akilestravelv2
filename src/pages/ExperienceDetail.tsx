@@ -86,9 +86,10 @@ export default function ExperienceDetail() {
           <div>
             <h1 className="font-display text-3xl tracking-tight sm:text-4xl">{exp.title}</h1>
             <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
-              {(exp.city || exp.area) && (
+              {(exp.city || exp.area || exp.country) && (
                 <span className="inline-flex items-center gap-1.5">
-                  <MapPin className="h-4 w-4" /> {[exp.area, exp.city].filter(Boolean).join(", ")}
+                  <MapPin className="h-4 w-4" />{" "}
+                  {[exp.area, exp.city, exp.country].filter(Boolean).join(", ")}
                 </span>
               )}
               <span className="inline-flex items-center gap-1.5">
@@ -481,8 +482,6 @@ function MeetingPoint({ exp }: { exp: PublicExperience }) {
     written ||
     cityLabel ||
     (coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : "");
-  // Show the city underneath only when the title is a distinct place name.
-  const address = placeName && cityLabel && cityLabel.toLowerCase() !== placeName.toLowerCase() ? cityLabel : "";
 
   // Exact pin when we have coordinates; otherwise search by the written address
   // or the city. Short goo.gl links can't be pinned in-frame — the button opens
@@ -505,15 +504,10 @@ function MeetingPoint({ exp }: { exp: PublicExperience }) {
       <h2 className="mb-2 inline-flex items-center gap-2 font-display text-lg">
         <MapPin className="h-5 w-5 text-primary" /> Punto de encuentro
       </h2>
-      <div className="flex items-start gap-2">
-        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">
-            {title || "El proveedor compartirá el punto exacto al confirmar."}
-          </p>
-          {address && <p className="text-xs text-muted-foreground">{address}</p>}
-        </div>
-      </div>
+      <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+        <MapPin className="h-4 w-4 shrink-0 text-primary" />
+        {title || "El proveedor compartirá el punto exacto al confirmar."}
+      </p>
 
       <div className="mt-3 overflow-hidden rounded-2xl border border-border">
         <iframe

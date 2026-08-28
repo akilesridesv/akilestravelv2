@@ -29,6 +29,7 @@ import {
   Backpack,
   ListChecks,
   Ban,
+  Globe,
 } from "lucide-react";
 
 /**
@@ -188,6 +189,17 @@ export function ExperienceDraftEditor({
             inputMode="decimal"
             value={d.duration_hours || ""}
             onChange={(e) => set("duration_hours", parseFloat(e.target.value) || 0)}
+          />
+        </div>
+
+        <div>
+          <Label className="inline-flex items-center gap-1">
+            <Globe className="h-3 w-3" /> País
+          </Label>
+          <Input
+            value={d.country ?? ""}
+            placeholder="Ej. El Salvador"
+            onChange={(e) => set("country", e.target.value)}
           />
         </div>
 
