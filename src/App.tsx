@@ -5,6 +5,7 @@ import { initAuth } from "@/lib/auth";
 
 // Code-split heavier routes so the landing loads with a minimal bundle.
 const Auth = lazy(() => import("@/pages/Auth"));
+const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const ProviderDashboard = lazy(() => import("@/pages/ProviderDashboard"));
 const PublicExperience = lazy(() => import("@/pages/PublicExperience"));
 
@@ -24,6 +25,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/reset" element={<ResetPassword />} />
           <Route path="/panel" element={<ProviderDashboard />} />
           <Route path="/e/:id" element={<PublicExperience />} />
           <Route path="*" element={<Navigate to="/" replace />} />

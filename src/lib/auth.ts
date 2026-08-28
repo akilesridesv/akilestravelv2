@@ -66,6 +66,22 @@ export async function authSignOut(): Promise<void> {
   useApp.getState().signOut();
 }
 
+/** Send a password-reset email; the link returns to /reset. */
+export async function authResetPassword(email: string): Promise<AuthResult> {
+  if (!supabase) return { error: "Configura Supabase para restablecer la contraseña." };
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + "/reset",
+  });
+  return error ? { error: error.message } : {};
+}
+
+/** Set a new password for the recovering user (on the /reset page). */
+export async function authUpdatePassword(password: string): Promise<AuthResult> {
+  if (!supabase) return { error: "Configura Supabase." };
+  const { error } = await supabase.auth.updateUser({ password });
+  return error ? { error: error.message } : {};
+}
+
 /** On app start: restore an existing session and listen for auth changes. */
 export function initAuth(): () => void {
   if (!isSupabaseConfigured || !supabase) return () => {};
