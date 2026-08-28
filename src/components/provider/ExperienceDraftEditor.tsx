@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Experience, ExperienceDraft } from "@/types/domain";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { DateCalendar } from "@/components/provider/DateCalendar";
 import { DeadlineControl } from "@/components/provider/DeadlineControl";
 import { draftToPatch } from "@/lib/experience";
 import { notify } from "@/state/toast";
+import { useDraftImages } from "@/state/draftImages";
 import { formatUSD, cn } from "@/lib/utils";
 import {
   Check,
@@ -51,6 +52,20 @@ export function ExperienceDraftEditor({
   const [d, setD] = useState<ExperienceDraft>(initial);
   const [published, setPublished] = useState(false);
   const [showDates, setShowDates] = useState((initial.date_slots ?? []).length > 0);
+
+  // Consume images uploaded from the chat composer's "add images" button and
+  // append them to this draft (first mounted editor wins — consume is atomic).
+  const pendingImages = useDraftImages((s) => s.pending);
+  const consumeImages = useDraftImages((s) => s.consume);
+  useEffect(() => {
+    if (published || pendingImages.length === 0) return;
+    const refs = consumeImages();
+    if (!refs.length) return;
+    setD((prev) => {
+      const next = [...prev.image_urls, ...refs];
+      return { ...prev, image_urls: next, featured_image: prev.featured_image ?? next[0] };
+    });
+  }, [pendingImages, published, consumeImages]);
 
   const set = <K extends keyof ExperienceDraft>(k: K, v: ExperienceDraft[K]) =>
     setD((prev) => ({ ...prev, [k]: v }));

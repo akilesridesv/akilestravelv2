@@ -16,6 +16,9 @@ import {
 import { bookingLink } from "@/lib/experience";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { notify } from "@/state/toast";
+import { useDraftImages } from "@/state/draftImages";
+import { processImageFile, ImageError } from "@/lib/imageProcess";
+import { putImage, putImageRemote } from "@/lib/imageStore";
 import * as repo from "@/data/repo";
 import type { ExperienceDraft } from "@/types/domain";
 import { ExperienceDraftEditor } from "@/components/provider/ExperienceDraftEditor";
@@ -23,7 +26,7 @@ import { BookingsPanel, RevenuePanel, ExperiencesPanel } from "@/components/prov
 import { useApp } from "@/state/store";
 import { experienceToDraft } from "@/lib/experience";
 import { uid } from "@/lib/utils";
-import { ArrowUp, Sparkles } from "lucide-react";
+import { ArrowUp, Sparkles, ImagePlus, Loader2 } from "lucide-react";
 
 // Monotonic client timestamps so a user message and its reply keep their order
 // even when saved within the same millisecond.
@@ -75,6 +78,36 @@ export function CopilotSurface({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploadingImgs, setUploadingImgs] = useState(false);
+  const addDraftImages = useDraftImages((s) => s.add);
+
+  async function handleComposerImages(files: FileList | null) {
+    if (!files?.length) return;
+    setUploadingImgs(true);
+    const refs: string[] = [];
+    try {
+      for (const file of Array.from(files)) {
+        try {
+          const { blob } = await processImageFile(file);
+          refs.push(isSupabaseConfigured ? await putImageRemote(blob) : await putImage(blob));
+        } catch (e) {
+          notify(e instanceof ImageError ? e.message : "No se pudo subir la imagen.", "warning");
+        }
+      }
+      if (refs.length) {
+        addDraftImages(refs);
+        notify(
+          `${refs.length} imagen${refs.length === 1 ? "" : "es"} lista${
+            refs.length === 1 ? "" : "s"
+          } — se agrega${refs.length === 1 ? "" : "n"} a la experiencia que estés creando o editando.`
+        );
+      }
+    } finally {
+      setUploadingImgs(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
 
   // Shared application state — the copilot reads and writes the same store the
   // direct panels use, so a chat edit and a manual edit are the same action.
@@ -430,7 +463,7 @@ export function CopilotSurface({
       </div>
 
       {/* Composer */}
-      <div className="safe-b border-t border-border bg-background/80 px-4 pb-5 pt-3 backdrop-blur sm:px-6">
+      <div className="border-t border-border bg-background/80 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] backdrop-blur sm:px-6">
         <form
           className="mx-auto flex max-w-2xl items-end gap-2"
           onSubmit={(e) => {
@@ -438,6 +471,23 @@ export function CopilotSurface({
             handleSend(input);
           }}
         >
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploadingImgs}
+            aria-label="Agregar imágenes"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:bg-accent disabled:opacity-60"
+          >
+            {uploadingImgs ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => handleComposerImages(e.target.files)}
+          />
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
