@@ -60,10 +60,14 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    scroll-behavior: smooth;
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-feature-settings: "cv11", "ss01";
+    /* Never lock vertical scroll; only tame accidental horizontal overflow. */
+    overflow-x: hidden;
+    overflow-y: auto;
   }
   h1, h2, h3, h4 {
     @apply font-display tracking-tight;
