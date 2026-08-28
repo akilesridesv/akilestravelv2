@@ -50,17 +50,18 @@ export default function ProviderPublic() {
   return (
     <div className="min-h-dvh bg-background">
       <TouristHeader />
-      <Cover imageRef={provider.cover_url} />
-
-      <main className="mx-auto max-w-5xl px-5 sm:px-8">
+      <div className="relative">
+        <Cover imageRef={provider.cover_url} />
         <Link
           to="/"
-          className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          className="absolute left-4 top-4 inline-flex items-center gap-1 rounded-full bg-background/85 px-3 py-1.5 text-sm font-medium shadow-sm backdrop-blur transition hover:bg-background"
         >
           <ChevronLeft className="h-4 w-4" /> Explorar
         </Link>
+      </div>
 
-        <div className="-mt-2 flex flex-col gap-3 sm:flex-row sm:items-end">
+      <main className="mx-auto max-w-5xl px-5 sm:px-8">
+        <div className="flex flex-col gap-3 pt-3 sm:flex-row sm:items-end">
           <Logo imageRef={provider.logo_url} name={provider.business_name} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
