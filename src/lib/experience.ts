@@ -78,6 +78,7 @@ export function draftToPatch(d: ExperienceDraft): Partial<Experience> {
     image_urls: d.image_urls,
     featured_image: d.featured_image,
     tiers: d.tiers,
+    date_slots: d.date_slots,
     registration_deadline_hours: d.registration_deadline_hours,
   };
 }

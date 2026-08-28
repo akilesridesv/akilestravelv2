@@ -3,7 +3,7 @@ import type { DateSlot, Experience } from "@/types/domain";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { addHours } from "@/ai/nlp";
-import { cn, isoDate, todayISO, addDaysISO, monthName, uid } from "@/lib/utils";
+import { cn, isoDate, todayISO, todayPartsSV, addDaysISO, monthName, uid } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Check, X, CalendarPlus } from "lucide-react";
 
 const DOW = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
@@ -13,17 +13,24 @@ const DOW = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
  * range, then enable (with a chosen time + capacity) or remove those dates.
  * Concrete dates are stored as date_slots, layered over the weekly pattern.
  */
+type CalendarExperience = Pick<
+  Experience,
+  "date_slots" | "max_capacity" | "duration_hours" | "tiers"
+>;
+
 export function DateCalendar({
   experience,
   onChange,
 }: {
-  experience: Experience;
+  experience: CalendarExperience;
   onChange: (slots: DateSlot[]) => void;
 }) {
   const slots = experience.date_slots ?? [];
   const today = todayISO();
-  const now = new Date();
-  const [cursor, setCursor] = useState({ y: now.getFullYear(), m: now.getMonth() });
+  const [cursor, setCursor] = useState(() => {
+    const t = todayPartsSV();
+    return { y: t.y, m: t.m };
+  });
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [dragging, setDragging] = useState(false);
   const anchor = useRef<string | null>(null);

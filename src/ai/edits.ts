@@ -1,6 +1,7 @@
 import type { Booking, DateSlot, Experience, RecurringSchedule, TicketTier } from "@/types/domain";
 import { uid, monthName } from "@/lib/utils";
 import { addHours, DAY_ABBR, parseDaysFromText, parseMoney, parseTimeToken, stripAccents } from "@/ai/nlp";
+import { normalize, levenshtein } from "@/lib/fuzzy";
 
 // --------------------------------------------------------------------------
 // Resolve which experience / booking a chat command refers to.
@@ -9,20 +10,41 @@ import { addHours, DAY_ABBR, parseDaysFromText, parseMoney, parseTimeToken, stri
 export function resolveExperience(text: string, exps: Experience[]): Experience | null {
   if (exps.length === 0) return null;
   if (exps.length === 1) return exps[0];
-  const low = stripAccents(text.toLowerCase());
+  const low = normalize(text);
+
+  // 1. Word overlap: how many meaningful title words appear in the command.
   let best: Experience | null = null;
-  let score = 0;
+  let overlap = 0;
   for (const e of exps) {
-    const words = stripAccents(e.title.toLowerCase())
+    const words = normalize(e.title)
       .split(/\s+/)
       .filter((w) => w.length > 3);
     const s = words.filter((w) => low.includes(w)).length;
-    if (s > score) {
-      score = s;
+    if (s > overlap) {
+      overlap = s;
       best = e;
     }
   }
-  return score > 0 ? best : exps[0]; // fallback: most recent
+  if (overlap > 0) return best;
+
+  // 2. Fuzzy fallback: closest title word to any command word (typo tolerance).
+  const cmdWords = low.split(/\s+/).filter((w) => w.length > 2);
+  let fuzzyBest: Experience | null = null;
+  let fuzzyScore = Infinity;
+  for (const e of exps) {
+    for (const tw of normalize(e.title).split(/\s+/).filter((w) => w.length > 2)) {
+      for (const cw of cmdWords) {
+        const d = levenshtein(cw, tw);
+        if (d < fuzzyScore) {
+          fuzzyScore = d;
+          fuzzyBest = e;
+        }
+      }
+    }
+  }
+  if (fuzzyBest && fuzzyScore <= 2) return fuzzyBest;
+
+  return exps[0]; // fallback: most recent
 }
 
 // --------------------------------------------------------------------------
@@ -322,9 +344,25 @@ export function parseBookingAction(text: string, bookings: Booking[]): BookingAc
   const pending = bookings.filter((b) => b.booking_status === "pending_approval");
   const pool = pending.length ? pending : bookings;
 
-  // match by first name mentioned
+  // match by first name mentioned (accent-insensitive)
   let match =
-    pool.find((b) => low.includes(stripAccents(b.contact_name.toLowerCase().split(" ")[0]))) ?? null;
+    pool.find((b) => low.includes(normalize(b.contact_name.split(" ")[0]))) ?? null;
+  // fuzzy fallback: closest first name to any command word (José/Jose, typos)
+  if (!match) {
+    const words = low.split(/\s+/).filter((w) => w.length > 2);
+    let bestScore = Infinity;
+    for (const b of pool) {
+      const first = normalize(b.contact_name.split(" ")[0]);
+      for (const w of words) {
+        const d = levenshtein(w, first);
+        if (d < bestScore) {
+          bestScore = d;
+          match = b;
+        }
+      }
+    }
+    if (bestScore > 2) match = null;
+  }
   // if only one pending and no name, act on it
   if (!match && pending.length === 1) match = pending[0];
   if (!match) return null;

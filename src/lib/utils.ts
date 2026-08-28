@@ -39,15 +39,36 @@ export function monthName(m: number): string {
   return MONTHS_ES[m] ?? "";
 }
 
-/** Local YYYY-MM-DD (no UTC shift). */
+/** Local YYYY-MM-DD (no UTC shift). Used for building calendar grids. */
 export function isoDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
     d.getDate()
   ).padStart(2, "0")}`;
 }
 
+// The whole system operates on El Salvador time (UTC-6, no DST) so bookings and
+// future payments never drift by a timezone, regardless of the viewer's device.
+export const APP_TIMEZONE = "America/El_Salvador";
+
+/** Today's date (YYYY-MM-DD) in El Salvador time, independent of device TZ. */
 export function todayISO(): string {
-  return isoDate(new Date());
+  return new Intl.DateTimeFormat("en-CA", { timeZone: APP_TIMEZONE }).format(new Date());
+}
+
+/** Current time HH:MM in El Salvador time. */
+export function nowTimeSV(): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: APP_TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date());
+}
+
+/** {year, monthIndex} of "today" in El Salvador, for initializing calendars. */
+export function todayPartsSV(): { y: number; m: number; d: number } {
+  const [y, m, d] = todayISO().split("-").map(Number);
+  return { y, m: m - 1, d };
 }
 
 /** Parse YYYY-MM-DD as a LOCAL date (midnight local), avoiding UTC drift. */

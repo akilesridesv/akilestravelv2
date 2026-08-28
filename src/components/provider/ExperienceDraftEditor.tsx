@@ -7,10 +7,23 @@ import { useApp } from "@/state/store";
 import { ImageUploader } from "@/components/provider/ImageUploader";
 import { TierManager } from "@/components/provider/TierManager";
 import { ScheduleEditor } from "@/components/provider/ScheduleEditor";
+import { DateCalendar } from "@/components/provider/DateCalendar";
 import { DeadlineControl } from "@/components/provider/DeadlineControl";
 import { draftToPatch } from "@/lib/experience";
-import { formatUSD } from "@/lib/utils";
-import { Check, MapPin, Clock, Users, CalendarDays, Sparkles, X, Ticket, Timer } from "lucide-react";
+import { formatUSD, cn } from "@/lib/utils";
+import {
+  Check,
+  MapPin,
+  Clock,
+  Users,
+  CalendarDays,
+  CalendarRange,
+  Sparkles,
+  X,
+  Ticket,
+  Timer,
+  ChevronDown,
+} from "lucide-react";
 
 /**
  * The editable listing card. Used in two modes:
@@ -36,6 +49,7 @@ export function ExperienceDraftEditor({
   const updateExperience = useApp((s) => s.updateExperience);
   const [d, setD] = useState<ExperienceDraft>(initial);
   const [published, setPublished] = useState(false);
+  const [showDates, setShowDates] = useState((initial.date_slots ?? []).length > 0);
 
   const set = <K extends keyof ExperienceDraft>(k: K, v: ExperienceDraft[K]) =>
     setD((prev) => ({ ...prev, [k]: v }));
@@ -205,6 +219,36 @@ export function ExperienceDraftEditor({
             durationHours={d.duration_hours}
             defaultCapacity={d.max_capacity}
           />
+        </div>
+
+        {/* Specific dates (Airbnb-style month calendar) */}
+        <div className="sm:col-span-2">
+          <button
+            type="button"
+            onClick={() => setShowDates((s) => !s)}
+            className="flex w-full items-center gap-1.5 text-left"
+          >
+            <CalendarRange className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground">
+              Fechas específicas para reservar (opcional)
+            </span>
+            {(d.date_slots ?? []).length > 0 && (
+              <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] text-ink">
+                {(d.date_slots ?? []).length}
+              </span>
+            )}
+            <ChevronDown
+              className={cn(
+                "ml-auto h-4 w-4 text-muted-foreground transition-transform",
+                showDates && "rotate-180"
+              )}
+            />
+          </button>
+          {showDates && (
+            <div className="mt-2 rounded-xl border border-border p-3">
+              <DateCalendar experience={d} onChange={(ds) => set("date_slots", ds)} />
+            </div>
+          )}
         </div>
 
         {/* Minimum advance booking */}

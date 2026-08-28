@@ -10,8 +10,11 @@ import { ScheduleEditor } from "@/components/provider/ScheduleEditor";
 import { WeekAgenda, TodayAgenda } from "@/components/provider/WeekAgenda";
 import { DateCalendar } from "@/components/provider/DateCalendar";
 import { Modal } from "@/components/ui/modal";
+import { SearchBar } from "@/components/ui/SearchBar";
+import { Pagination } from "@/components/ui/Pagination";
 import { deleteImages } from "@/lib/imageStore";
 import { blankDraft, experienceToDraft, displayPrice, bookingLink } from "@/lib/experience";
+import { fuzzyMatch } from "@/lib/fuzzy";
 import { formatUSD, dayName, uid, cn } from "@/lib/utils";
 import { addHours } from "@/ai/nlp";
 import type { Booking, Experience, PublicationStatus, RecurringSchedule } from "@/types/domain";
@@ -63,6 +66,9 @@ export function ExperiencesPanel() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const PAGE = 6;
 
   async function share(e: Experience) {
     const url = bookingLink(e.id);
@@ -103,18 +109,34 @@ export function ExperiencesPanel() {
       </div>
     );
 
+  const filtered = query
+    ? experiences.filter((e) => fuzzyMatch(query, `${e.title} ${e.city ?? ""}`))
+    : experiences;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE));
+  const pageSafe = Math.min(page, pageCount - 1);
+  const items = filtered.slice(pageSafe * PAGE, pageSafe * PAGE + PAGE);
+
   return (
     <div className="grid grid-cols-1 gap-3">
-      <Button
-        variant="outline"
-        size="sm"
-        className="justify-self-start"
-        onClick={() => setCreating(true)}
-      >
-        <Plus className="h-4 w-4" /> Nueva experiencia
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
+          <Plus className="h-4 w-4" /> Nueva
+        </Button>
+        {experiences.length > 4 && (
+          <div className="min-w-[180px] flex-1">
+            <SearchBar
+              value={query}
+              onChange={(v) => {
+                setQuery(v);
+                setPage(0);
+              }}
+              placeholder="Buscar experiencia…"
+            />
+          </div>
+        )}
+      </div>
 
-      {experiences.map((e) =>
+      {items.map((e) =>
         editingId === e.id ? (
           <ExperienceDraftEditor
             key={e.id}
@@ -198,6 +220,13 @@ export function ExperiencesPanel() {
           </Card>
           )
         )}
+
+      {filtered.length === 0 && (
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          Sin resultados para “{query}”.
+        </p>
+      )}
+      <Pagination page={pageSafe} pageCount={pageCount} onPage={setPage} />
     </div>
   );
 }
@@ -208,6 +237,9 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
   const bookings = useApp((s) => s.bookings);
   const setStatus = useApp((s) => s.setBookingStatus);
   const [modalId, setModalId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const PAGE = 8;
 
   if (!bookings.length)
     return (
@@ -222,11 +254,27 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
   const sorted = [...bookings].sort(
     (a, b) => order.indexOf(a.booking_status) - order.indexOf(b.booking_status)
   );
+  const filtered = query
+    ? sorted.filter((b) => fuzzyMatch(query, `${b.contact_name} ${b.experience_title}`))
+    : sorted;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE));
+  const pageSafe = Math.min(page, pageCount - 1);
+  const items = filtered.slice(pageSafe * PAGE, pageSafe * PAGE + PAGE);
   const active = bookings.find((b) => b.id === modalId) ?? null;
 
   return (
     <div className="grid grid-cols-1 gap-3">
-      {sorted.map((b) => (
+      {bookings.length > 5 && (
+        <SearchBar
+          value={query}
+          onChange={(v) => {
+            setQuery(v);
+            setPage(0);
+          }}
+          placeholder="Buscar por cliente o experiencia…"
+        />
+      )}
+      {items.map((b) => (
         <button
           key={b.id}
           type="button"
@@ -246,6 +294,13 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
           <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
         </button>
       ))}
+
+      {filtered.length === 0 && (
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          Sin resultados para “{query}”.
+        </p>
+      )}
+      <Pagination page={pageSafe} pageCount={pageCount} onPage={setPage} />
 
       <Modal
         open={!!active}
