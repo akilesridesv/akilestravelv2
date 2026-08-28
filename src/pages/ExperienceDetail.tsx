@@ -454,15 +454,35 @@ function parseLatLng(input?: string): { lat: number; lng: number } | null {
   return null;
 }
 
+/** Pull the place name out of a Google Maps URL (/maps/place/<Name>/@...). */
+function parseMapsPlaceName(url?: string): string | null {
+  if (!url) return null;
+  const m = url.match(/\/maps\/place\/([^/@?]+)/);
+  if (!m) return null;
+  const raw = m[1].replace(/\+/g, " ");
+  try {
+    return decodeURIComponent(raw).trim() || null;
+  } catch {
+    return raw.trim() || null;
+  }
+}
+
 function MeetingPoint({ exp }: { exp: PublicExperience }) {
   const mp = exp.location_address?.trim();
   const coords = parseLatLng(mp);
   const link = isLink(mp) ? ensureHttp(mp!) : undefined;
   const written = mp && !link && !coords ? mp : "";
+  const placeName = parseMapsPlaceName(mp);
 
   const cityLabel = [exp.area, exp.city].filter(Boolean).join(", ");
-  const label =
-    written || cityLabel || (coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : "");
+  // Title = place name from the link, or written address, or city/coords.
+  const title =
+    placeName ||
+    written ||
+    cityLabel ||
+    (coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : "");
+  // Show the city underneath only when the title is a distinct place name.
+  const address = placeName && cityLabel && cityLabel.toLowerCase() !== placeName.toLowerCase() ? cityLabel : "";
 
   // Exact pin when we have coordinates; otherwise search by the written address
   // or the city. Short goo.gl links can't be pinned in-frame — the button opens
@@ -485,10 +505,15 @@ function MeetingPoint({ exp }: { exp: PublicExperience }) {
       <h2 className="mb-2 inline-flex items-center gap-2 font-display text-lg">
         <MapPin className="h-5 w-5 text-primary" /> Punto de encuentro
       </h2>
-      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <MapPin className="h-4 w-4 text-primary" />
-        {label || "El proveedor compartirá el punto exacto al confirmar."}
-      </p>
+      <div className="flex items-start gap-2">
+        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">
+            {title || "El proveedor compartirá el punto exacto al confirmar."}
+          </p>
+          {address && <p className="text-xs text-muted-foreground">{address}</p>}
+        </div>
+      </div>
 
       <div className="mt-3 overflow-hidden rounded-2xl border border-border">
         <iframe
