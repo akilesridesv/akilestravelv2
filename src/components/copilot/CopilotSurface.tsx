@@ -166,8 +166,31 @@ export function CopilotSurface({
     push("user", [{ type: "text", text: value }]);
     setBusy(true);
 
-    const intent = classifyIntent(value, context);
     try {
+      // The LLM (Gemini) handles anything the rule-based classifier doesn't
+      // recognize on its own — i.e. before the context fallback would absorb it.
+      if (isLLMEnabled && classifyIntent(value) === "unknown") {
+        try {
+          const history: ChatTurn[] = messages.flatMap((m) => {
+            const tb = m.blocks.find((b) => b.type === "text") as
+              | { type: "text"; text: string }
+              | undefined;
+            return tb ? [{ role: m.role, text: tb.text }] : [];
+          });
+          const res = await runCopilotTurn(value, history);
+          push("assistant", [{ type: "text", text: res.text }]);
+          if (res.changes.length)
+            notify(
+              res.changes.length === 1 ? res.changes[0] : `${res.changes.length} cambios aplicados`
+            );
+          return;
+        } catch (e) {
+          console.error("LLM error", e);
+          // fall through to the heuristic routing below
+        }
+      }
+
+      const intent = classifyIntent(value, context);
       switch (intent) {
         case "create_experience": {
           const { draft, summary, assumptions } = await extractExperience(value);
@@ -462,29 +485,7 @@ export function CopilotSurface({
             },
           ]);
           break;
-        default: {
-          if (isLLMEnabled) {
-            const history: ChatTurn[] = messages.flatMap((m) => {
-              const tb = m.blocks.find((b) => b.type === "text") as
-                | { type: "text"; text: string }
-                | undefined;
-              return tb ? [{ role: m.role, text: tb.text }] : [];
-            });
-            try {
-              const res = await runCopilotTurn(value, history);
-              push("assistant", [{ type: "text", text: res.text }]);
-              if (res.changes.length)
-                notify(
-                  res.changes.length === 1
-                    ? res.changes[0]
-                    : `${res.changes.length} cambios aplicados`
-                );
-              break;
-            } catch (e) {
-              console.error("LLM error", e);
-              // fall through to the heuristic suggestions
-            }
-          }
+        default:
           push("assistant", [
             {
               type: "text",
@@ -501,7 +502,6 @@ export function CopilotSurface({
               ],
             },
           ]);
-        }
       }
     } finally {
       setBusy(false);

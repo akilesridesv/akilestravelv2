@@ -31,10 +31,11 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public, extensions, vault
+set statement_timeout to '55s'   -- Gemini calls can exceed the role's default (~8s)
 as $$
 declare
   api_key text;
-  model   text := 'gemini-2.5-flash';
+  model   text := 'gemini-3.6-flash';
   body    jsonb;
   resp    jsonb;
 begin
@@ -43,7 +44,9 @@ begin
   where name = 'gemini_api_key'
   limit 1;
 
-  if api_key is null or api_key = 'PEGA_TU_API_KEY_AQUI' then
+  -- NOTE: do NOT add a check against the literal key here — a find/replace of the
+  -- placeholder above would also replace it and break the function.
+  if api_key is null then
     raise exception 'Falta la Gemini API key en Vault (gemini_api_key).';
   end if;
 
@@ -53,7 +56,7 @@ begin
          'generationConfig', coalesce(payload->'generationConfig', '{"temperature":0.4}'::jsonb)
        );
 
-  perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS', '45000');
+  perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS', '50000');
 
   select content::jsonb into resp
   from extensions.http((
