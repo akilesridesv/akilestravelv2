@@ -741,7 +741,7 @@ export function CopilotSurface({
       )}
 
       {/* Chat column */}
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Top bar: history toggle + current chat + new */}
         {convEnabled && (
           <div className="flex shrink-0 items-center gap-2 border-b border-border bg-background/80 px-3 py-2 backdrop-blur sm:px-4">
@@ -765,11 +765,11 @@ export function CopilotSurface({
         )}
 
         {/* Message stream */}
-        <div ref={scrollRef} className="no-scrollbar flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+        <div ref={scrollRef} className="no-scrollbar flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-6">
         {empty ? (
           <Welcome onPick={handleSend} />
         ) : (
-          <div className="mx-auto flex max-w-2xl flex-col gap-4">
+          <div className="mx-auto flex w-full min-w-0 max-w-2xl flex-col gap-4">
             {messages.map((m) => (
               <MessageView key={m.id} message={m} onAction={handleSend} />
             ))}
@@ -863,7 +863,7 @@ function MessageView({
   const isUser = message.role === "user";
   return (
     <div className={isUser ? "flex justify-end" : "flex justify-start"}>
-      <div className={isUser ? "max-w-[85%]" : "w-full"}>
+      <div className={isUser ? "min-w-0 max-w-[85%]" : "w-full min-w-0"}>
         {message.blocks.map((b, i) => (
           <div key={i} className={i > 0 ? "mt-2" : ""}>
             <BlockView block={b} isUser={isUser} onAction={onAction} />
@@ -886,7 +886,7 @@ function BlockView({
   switch (block.type) {
     case "text":
       return isUser ? (
-        <div className="rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-sm text-background">
+        <div className="whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-sm text-background">
           {block.text}
         </div>
       ) : (
