@@ -27,6 +27,9 @@ interface AppState {
   // domain
   experiences: Experience[];
   bookings: Booking[];
+  // The experience whose card is currently open in the chat — the copilot's
+  // default target for edits so it never jumps to a different one by accident.
+  activeExperienceId: string | null;
 
   // auth actions (local mock; Supabase Auth wires in via setSession)
   signIn: (email: string, name?: string) => void;
@@ -44,6 +47,7 @@ interface AppState {
   publishDraft: (draft: ExperienceDraft) => Experience;
   updateExperience: (id: string, patch: Partial<Experience>) => void;
   removeExperience: (id: string) => void;
+  setActiveExperience: (id: string | null) => void;
 
   // booking actions
   addBooking: (b: Booking) => void;
@@ -112,6 +116,7 @@ export const useApp = create<AppState>()(
       authReady: !remote, // local mode is ready immediately
       experiences: [],
       bookings: [],
+      activeExperienceId: null,
 
       signIn: (email, name) => {
         const existing = get().user;
@@ -124,7 +129,8 @@ export const useApp = create<AppState>()(
         set({ user, provider, bookings, authReady: true });
       },
 
-      signOut: () => set({ user: null, provider: null, experiences: [], bookings: [] }),
+      signOut: () =>
+        set({ user: null, provider: null, experiences: [], bookings: [], activeExperienceId: null }),
 
       setSession: (user, provider, experiences, bookings) =>
         set({ user, provider, experiences, bookings, authReady: true }),
@@ -185,9 +191,14 @@ export const useApp = create<AppState>()(
       },
 
       removeExperience: (id) => {
-        set({ experiences: get().experiences.filter((e) => e.id !== id) });
+        set((s) => ({
+          experiences: s.experiences.filter((e) => e.id !== id),
+          activeExperienceId: s.activeExperienceId === id ? null : s.activeExperienceId,
+        }));
         if (remote) void repo.deleteExperience(id).catch(console.error);
       },
+
+      setActiveExperience: (id) => set({ activeExperienceId: id }),
 
       addBooking: (b) => set({ bookings: [b, ...get().bookings] }),
 

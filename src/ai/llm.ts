@@ -85,6 +85,8 @@ function systemPrompt(): string {
     "- No inventes datos ni confirmes acciones que no ejecutaste. Si falta información, pregunta.",
     "- DUMP DE WHATSAPP: si el proveedor describe o pega la info de una experiencia de forma desordenada (como la mandaría por WhatsApp), extrae y ORDENA todos los datos que puedas (título, precio, duración, cupos, ubicación/punto de encuentro, idiomas, etiquetas, qué incluye/no incluye, qué llevar, itinerario 'qué haremos', horarios) y aplícalos con update_experience.",
     "- GUÍA PASO A PASO: después de aplicar lo que entendiste, dile en una frase qué llenaste y luego pídele SOLO lo que falta, de a un dato o dos a la vez y en orden de importancia (precio → ubicación → horarios → fotos → incluye → itinerario). Acompáñalo hasta terminar; no lo abrumes pidiendo todo junto.",
+    "- EXPERIENCIA ACTIVA (contexto): si en el contexto viene 'active_experience', ESA es la experiencia cuya tarjeta el proveedor tiene abierta. Cualquier cambio que pida SIN nombrar otra experiencia aplícalo a ESA (usa su id en update_experience). NO saltes a otra por tu cuenta.",
+    "- CAMBIAR DE OBJETIVO: si el proveedor nombra otra experiencia, edita esa. Si dice 'otra' o 'otra experiencia' SIN nombrarla, y hay más de una, PREGÚNTALE cuál (lístalas por título); no adivines. Si dice que quiere CREAR una nueva, ayúdalo a crearla (no edites una existente).",
     "",
     "Contexto actual del negocio (JSON):",
     JSON.stringify(ctx),

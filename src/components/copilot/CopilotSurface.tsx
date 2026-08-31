@@ -12,6 +12,7 @@ import {
   parseTierCommand,
   formatDeadline,
   resolveExperience,
+  resolveExperienceStrict,
 } from "@/ai/edits";
 import { bookingLink } from "@/lib/experience";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -133,6 +134,8 @@ export function CopilotSurface({
   // direct panels use, so a chat edit and a manual edit are the same action.
   const experiences = useApp((s) => s.experiences);
   const bookings = useApp((s) => s.bookings);
+  const activeExperienceId = useApp((s) => s.activeExperienceId);
+  const setActiveExperience = useApp((s) => s.setActiveExperience);
   const updateExperience = useApp((s) => s.updateExperience);
   const setBookingStatus = useApp((s) => s.setBookingStatus);
   const user = useApp((s) => s.user);
@@ -298,6 +301,13 @@ export function CopilotSurface({
       }
 
       const intent = classifyIntent(value, context);
+      // Which experience a command targets: the one named → the open (active) one
+      // → the single one → most recent. Keeps calendar/tiers/deadline on the card
+      // the provider has open instead of jumping to another.
+      const targetExperience = (text: string) =>
+        resolveExperienceStrict(text, experiences) ??
+        (activeExperienceId ? experiences.find((e) => e.id === activeExperienceId) : null) ??
+        resolveExperience(text, experiences);
       switch (intent) {
         case "create_experience": {
           const { draft, summary, assumptions, missing } = await extractExperience(value);
@@ -325,13 +335,32 @@ export function CopilotSurface({
           break;
         }
         case "edit_experience": {
-          const exp = resolveExperience(value, experiences);
+          // Prefer the experience the provider named; else the one whose card is
+          // open (active); else, if there's only one, that one. Never guess when
+          // it's ambiguous — ask which.
+          const named = resolveExperienceStrict(value, experiences);
+          const active = activeExperienceId
+            ? experiences.find((e) => e.id === activeExperienceId)
+            : null;
+          const mentionsOther = /\b(otra|la otra|otro tour|otra experiencia)\b/i.test(value);
+          const exp =
+            named ??
+            (mentionsOther ? null : active) ??
+            (experiences.length === 1 ? experiences[0] : null);
           if (!exp) {
-            push("assistant", [
-              { type: "text", text: "Aún no tienes experiencias que editar. Crea una describiéndola." },
-            ]);
+            if (experiences.length === 0) {
+              push("assistant", [
+                { type: "text", text: "Aún no tienes experiencias que editar. Crea una describiéndola." },
+              ]);
+            } else {
+              push("assistant", [
+                { type: "text", text: "¿Cuál experiencia quieres modificar? Toca una:" },
+                { type: "actions", label: "", items: experiences.map((e) => `edita ${e.title}`) },
+              ]);
+            }
             break;
           }
+          setActiveExperience(exp.id);
           const { patch, changes } = parseExperienceEdits(value, exp);
           if (changes.length) {
             updateExperience(exp.id, patch);
@@ -349,7 +378,7 @@ export function CopilotSurface({
           break;
         }
         case "manage_calendar": {
-          const exp = resolveExperience(value, experiences);
+          const exp = targetExperience(value);
           if (!exp) {
             push("assistant", [
               { type: "text", text: "Primero crea una experiencia; luego puedo abrir o bloquear sus salidas." },
@@ -387,7 +416,7 @@ export function CopilotSurface({
           break;
         }
         case "manage_tiers": {
-          const exp = resolveExperience(value, experiences);
+          const exp = targetExperience(value);
           if (!exp) {
             push("assistant", [
               { type: "text", text: "Primero crea una experiencia para gestionar sus tiers." },
@@ -416,7 +445,7 @@ export function CopilotSurface({
           break;
         }
         case "share_experience": {
-          const exp = resolveExperience(value, experiences);
+          const exp = targetExperience(value);
           if (!exp) {
             push("assistant", [
               { type: "text", text: "¿Cuál experiencia quieres compartir? Aún no tienes ninguna creada." },
@@ -432,7 +461,7 @@ export function CopilotSurface({
           break;
         }
         case "set_deadline": {
-          const exp = resolveExperience(value, experiences);
+          const exp = targetExperience(value);
           if (!exp) {
             push("assistant", [
               { type: "text", text: "Primero crea una experiencia para configurar su anticipación." },

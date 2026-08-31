@@ -17,7 +17,6 @@ import { cn } from "@/lib/utils";
 import {
   MessageSquare,
   LayoutGrid,
-  CalendarDays,
   Inbox,
   TrendingUp,
   BadgeCheck,
@@ -28,9 +27,9 @@ import {
 
 type Panel = "experiences" | "calendar" | "bookings" | "revenue" | "profile";
 
+// Calendar lives inside Experiencias and Reservas now — not its own bottom tab.
 const PANEL_TABS: { key: Panel; label: string; icon: React.ReactNode }[] = [
   { key: "experiences", label: "Experiencias", icon: <LayoutGrid className="h-4 w-4" /> },
-  { key: "calendar", label: "Calendario", icon: <CalendarDays className="h-4 w-4" /> },
   { key: "bookings", label: "Reservas", icon: <Inbox className="h-4 w-4" /> },
   { key: "revenue", label: "Ingresos", icon: <TrendingUp className="h-4 w-4" /> },
   { key: "profile", label: "Perfil", icon: <User className="h-4 w-4" /> },
@@ -174,7 +173,7 @@ export default function ProviderDashboard() {
           </div>
 
           {/* Bottom nav: Chat + the panels */}
-          <nav className="safe-b grid shrink-0 grid-cols-6 border-t border-border bg-background">
+          <nav className="safe-b grid shrink-0 grid-cols-5 border-t border-border bg-background">
             <MobileTab
               label="Chat"
               icon={<MessageSquare className="h-5 w-5" />}

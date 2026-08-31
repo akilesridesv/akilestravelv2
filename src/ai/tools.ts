@@ -58,6 +58,8 @@ export interface BusinessContext {
     status: Experience["publication_status"];
     departures: number;
   }[];
+  /** The experience whose card is open right now — default target for edits. */
+  active_experience: { id: string; title: string } | null;
 }
 
 /** JSON snapshot of the whole business — what an LLM reads before deciding. */
@@ -98,6 +100,10 @@ export function readBusinessContext(): BusinessContext {
       status: e.publication_status,
       departures: e.schedules.length + (e.date_slots?.length ?? 0),
     })),
+    active_experience: (() => {
+      const a = s.activeExperienceId ? s.experiences.find((e) => e.id === s.activeExperienceId) : null;
+      return a ? { id: a.id, title: a.title } : null;
+    })(),
   };
 }
 
@@ -345,8 +351,16 @@ export function applyExperiencePatch(input: any): ToolResult {
   const s = useApp.getState();
   const exp =
     s.experiences.find((e) => e.id === input.id) ??
+    (s.activeExperienceId ? s.experiences.find((e) => e.id === s.activeExperienceId) : undefined) ??
     (s.experiences.length === 1 ? s.experiences[0] : undefined);
-  if (!exp) return { ok: false, message: "No encontré esa experiencia." };
+  if (!exp)
+    return {
+      ok: false,
+      message:
+        s.experiences.length > 1
+          ? "¿Cuál experiencia quieres modificar? Dime el nombre."
+          : "No encontré esa experiencia.",
+    };
 
   // meeting_point is the friendly alias for location_address.
   const src: Record<string, unknown> = { ...input };

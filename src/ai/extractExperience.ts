@@ -234,6 +234,7 @@ async function llmExtract(input: string): Promise<ExtractionResult | null> {
     "Tu tarea: EXTRAER y ORDENAR los datos en un JSON estructurado. Llena SOLO los campos que aparezcan en el texto; deja vacío ('' o []) lo que no se mencione. NO inventes datos.",
     "Interpreta con flexibilidad y tolera errores de escritura y acentos.",
     "Para el itinerario ('qué haremos'): si el texto menciona paradas/pasos ('primero…, luego…, después…'), conviértelos en una lista ordenada de {title, subtitle, time_range, detail}.",
+    "Para 'description': NO copies el texto crudo del proveedor. Redáctalo como una descripción atractiva y ordenada (2-3 frases), integrando el itinerario y sus horas cuando existan.",
     "Precio en USD (solo el número). Duración en horas (número). Cupos como enteros.",
     "Idiomas y etiquetas como listas. 'punto de encuentro' (location_address) puede ser una dirección o link de mapa.",
     "Devuelve EXCLUSIVAMENTE el JSON pedido.",

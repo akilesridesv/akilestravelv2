@@ -47,6 +47,49 @@ export function resolveExperience(text: string, exps: Experience[]): Experience 
   return exps[0]; // fallback: most recent
 }
 
+/**
+ * Like resolveExperience, but returns null when the command does NOT clearly name
+ * an experience (no "most recent" fallback). Lets callers fall back to the active
+ * experience or ask which one, instead of silently editing the wrong one.
+ */
+export function resolveExperienceStrict(text: string, exps: Experience[]): Experience | null {
+  if (exps.length === 0) return null;
+  if (exps.length === 1) return exps[0];
+  const low = normalize(text);
+
+  let best: Experience | null = null;
+  let overlap = 0;
+  for (const e of exps) {
+    const words = normalize(e.title)
+      .split(/\s+/)
+      .filter((w) => w.length > 3);
+    const s = words.filter((w) => low.includes(w)).length;
+    if (s > overlap) {
+      overlap = s;
+      best = e;
+    }
+  }
+  if (overlap > 0) return best;
+
+  const cmdWords = low.split(/\s+/).filter((w) => w.length > 2);
+  let fuzzyBest: Experience | null = null;
+  let fuzzyScore = Infinity;
+  for (const e of exps) {
+    for (const tw of normalize(e.title).split(/\s+/).filter((w) => w.length > 2)) {
+      for (const cw of cmdWords) {
+        const dd = levenshtein(cw, tw);
+        if (dd < fuzzyScore) {
+          fuzzyScore = dd;
+          fuzzyBest = e;
+        }
+      }
+    }
+  }
+  if (fuzzyBest && fuzzyScore <= 1) return fuzzyBest;
+
+  return null; // no clear match — caller decides (active experience or ask)
+}
+
 // --------------------------------------------------------------------------
 // Experience field edits: "sube el precio a $40", "cupo máximo 12", "renombra a X"
 // --------------------------------------------------------------------------

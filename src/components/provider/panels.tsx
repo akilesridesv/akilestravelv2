@@ -3,10 +3,11 @@ import { useState } from "react";
 import { useApp } from "@/state/store";
 import { Card, Badge } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, Label } from "@/components/ui/input";
 import { ExperienceDraftEditor } from "@/components/provider/ExperienceDraftEditor";
 import { ExperienceImage } from "@/components/provider/ExperienceImage";
 import { ScheduleEditor } from "@/components/provider/ScheduleEditor";
+import { TierManager } from "@/components/provider/TierManager";
 import { TodayAgenda, DatedAgenda } from "@/components/provider/WeekAgenda";
 import { DateCalendar } from "@/components/provider/DateCalendar";
 import { Modal } from "@/components/ui/modal";
@@ -44,6 +45,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Share2,
+  Ticket,
   Check as CheckIcon,
 } from "lucide-react";
 
@@ -77,10 +79,25 @@ export function ExperiencesPanel() {
   const removeExperience = useApp((s) => s.removeExperience);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const PAGE = 6;
+
+  if (showCalendar)
+    return (
+      <div className="grid grid-cols-1 gap-3">
+        <button
+          type="button"
+          onClick={() => setShowCalendar(false)}
+          className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground transition hover:text-foreground"
+        >
+          <ChevronLeft className="h-4 w-4" /> Volver a experiencias
+        </button>
+        <CalendarPanel />
+      </div>
+    );
 
   async function share(e: Experience) {
     const url = bookingLink(e.id);
@@ -133,6 +150,9 @@ export function ExperiencesPanel() {
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
           <Plus className="h-4 w-4" /> Nueva
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setShowCalendar(true)}>
+          <CalendarDays className="h-4 w-4" /> Calendario
         </Button>
         {experiences.length > 4 && (
           <div className="min-w-[180px] flex-1">
@@ -256,15 +276,6 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
   const [view, setView] = useState<"list" | "calendar">("list");
   const PAGE = 8;
 
-  if (!bookings.length)
-    return (
-      <EmptyState
-        icon={<CalendarDays className="h-8 w-8" />}
-        title="Sin reservas todavía"
-        hint="Cuando un turista reserve una de tus experiencias, aparecerá aquí para que la gestiones."
-      />
-    );
-
   const order: Booking["booking_status"][] = ["pending_approval", "confirmed", "completed"];
   const expTitles = [...new Set(bookings.map((b) => b.experience_title))].filter(Boolean);
   const filtered = bookings
@@ -277,30 +288,26 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
   const items = filtered.slice(pageSafe * PAGE, pageSafe * PAGE + PAGE);
   const active = bookings.find((b) => b.id === modalId) ?? null;
 
-  // group filtered bookings by date for the calendar view
-  const byDate = new Map<string, Booking[]>();
-  for (const b of [...filtered].sort((a, b) => (a.scheduled_time || "").localeCompare(b.scheduled_time || ""))) {
-    const k = b.scheduled_date || "Sin fecha";
-    (byDate.get(k) ?? byDate.set(k, []).get(k)!).push(b);
-  }
-  const dateKeys = [...byDate.keys()].sort();
-
   const resetPage = () => setPage(0);
 
   return (
     <div className="grid grid-cols-1 gap-3">
       <div className="grid gap-2">
         <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <SearchBar
-              value={query}
-              onChange={(v) => {
-                setQuery(v);
-                resetPage();
-              }}
-              placeholder="Buscar cliente o experiencia…"
-            />
-          </div>
+          {view === "list" && bookings.length > 0 ? (
+            <div className="min-w-0 flex-1">
+              <SearchBar
+                value={query}
+                onChange={(v) => {
+                  setQuery(v);
+                  resetPage();
+                }}
+                placeholder="Buscar cliente o experiencia…"
+              />
+            </div>
+          ) : (
+            <div className="min-w-0 flex-1" />
+          )}
           <div className="inline-flex shrink-0 rounded-full border border-border p-0.5">
             {(["list", "calendar"] as const).map((v) => (
               <button
@@ -312,84 +319,82 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
                   view === v ? "bg-ink text-background" : "text-muted-foreground hover:bg-accent"
                 )}
               >
-                {v === "list" ? "Lista" : "Calendario"}
+                {v === "list" ? "Reservas" : "Calendario"}
               </button>
             ))}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <select
-            value={statusF}
-            onChange={(e) => {
-              setStatusF(e.target.value);
-              resetPage();
-            }}
-            className="h-9 rounded-xl border border-input bg-card px-3 text-sm"
-          >
-            <option value="">Todos los estados</option>
-            <option value="pending_approval">Por aprobar</option>
-            <option value="confirmed">Confirmadas</option>
-            <option value="completed">Completadas</option>
-            <option value="rejected">Rechazadas</option>
-            <option value="cancelled">Canceladas</option>
-          </select>
-          {expTitles.length > 1 && (
+        {view === "list" && bookings.length > 0 && (
+          <div className="flex flex-wrap gap-2">
             <select
-              value={expF}
+              value={statusF}
               onChange={(e) => {
-                setExpF(e.target.value);
+                setStatusF(e.target.value);
                 resetPage();
               }}
-              className="h-9 max-w-[55%] rounded-xl border border-input bg-card px-3 text-sm"
+              className="h-9 rounded-xl border border-input bg-card px-3 text-sm"
             >
-              <option value="">Todas las experiencias</option>
-              {expTitles.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
+              <option value="">Todos los estados</option>
+              <option value="pending_approval">Por aprobar</option>
+              <option value="confirmed">Confirmadas</option>
+              <option value="completed">Completadas</option>
+              <option value="rejected">Rechazadas</option>
+              <option value="cancelled">Canceladas</option>
             </select>
-          )}
-        </div>
+            {expTitles.length > 1 && (
+              <select
+                value={expF}
+                onChange={(e) => {
+                  setExpF(e.target.value);
+                  resetPage();
+                }}
+                className="h-9 max-w-[55%] rounded-xl border border-input bg-card px-3 text-sm"
+              >
+                <option value="">Todas las experiencias</option>
+                {expTitles.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
       </div>
 
       {view === "calendar" ? (
-        filtered.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Sin reservas con estos filtros.</p>
-        ) : (
-          dateKeys.map((k) => (
-            <div key={k} className="rounded-xl border border-border bg-card p-3">
-              <p className="mb-2 text-sm font-medium">{k}</p>
-              <div className="grid gap-2">
-                {byDate.get(k)!.map((b) => (
-                  <BookingRow key={b.id} b={b} onOpen={() => setModalId(b.id)} />
-                ))}
-              </div>
-            </div>
-          ))
-        )
+        // The experiences calendar (all + individual): view and edit cupos, tiers,
+        // horarios and fechas of your departures.
+        <CalendarPanel />
+      ) : bookings.length === 0 ? (
+        <EmptyState
+          icon={<Inbox className="h-8 w-8" />}
+          title="Sin reservas todavía"
+          hint="Cuando un turista reserve, aparecerá aquí. Mientras, toca “Calendario” para ver y ajustar tus salidas."
+        />
       ) : (
         <>
           {items.map((b) => (
-        <button
-          key={b.id}
-          type="button"
-          onClick={() => setModalId(b.id)}
-          className="flex w-full items-start gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:bg-accent"
-        >
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h3 className="truncate font-medium">{b.contact_name}</h3>
-              <BookingBadge status={b.booking_status} />
-            </div>
-            <p className="mt-0.5 truncate text-sm text-muted-foreground">{b.experience_title}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {b.number_of_people} pers · {b.scheduled_date} {b.scheduled_time} · {formatUSD(b.total_paid)}
-            </p>
-          </div>
-          <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-        </button>
-      ))}
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => setModalId(b.id)}
+              className="flex w-full items-start gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:bg-accent"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="truncate font-medium">{b.contact_name}</h3>
+                  <BookingBadge status={b.booking_status} />
+                </div>
+                <p className="mt-0.5 truncate text-sm text-muted-foreground">{b.experience_title}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {b.number_of_people} pers · {b.scheduled_date} {b.scheduled_time} ·{" "}
+                  {formatUSD(b.total_paid)}
+                </p>
+              </div>
+              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+            </button>
+          ))}
 
           {filtered.length === 0 && (
             <p className="py-6 text-center text-sm text-muted-foreground">
@@ -487,21 +492,6 @@ function BookingBadge({ status }: { status: Booking["booking_status"] }) {
   return <Badge tone={v.tone}>{v.label}</Badge>;
 }
 
-function BookingRow({ b, onOpen }: { b: Booking; onOpen: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex w-full items-center gap-2 rounded-lg bg-muted/50 px-2 py-1.5 text-left transition hover:bg-muted"
-    >
-      <span className="shrink-0 font-display text-sm tabular-nums">{b.scheduled_time || "—"}</span>
-      <span className="min-w-0 flex-1 truncate text-sm">
-        {b.contact_name} · {b.experience_title}
-      </span>
-      <BookingBadge status={b.booking_status} />
-    </button>
-  );
-}
 
 // --------------------------------------------------------------------------
 
@@ -716,13 +706,56 @@ export function CalendarPanel() {
 
       <Modal open={!!modalExp} onClose={() => setModalId(null)} title={modalExp?.title ?? ""}>
         {modalExp && (
-          <ScheduleEditor
-            value={modalExp.schedules}
-            onChange={(sch) => updateExperience(modalExp.id, { schedules: sch })}
-            tiers={modalExp.tiers}
-            durationHours={modalExp.duration_hours}
-            defaultCapacity={modalExp.max_capacity}
-          />
+          <div className="grid gap-5">
+            {/* Cupos */}
+            <div>
+              <Label className="inline-flex items-center gap-1">
+                <Users className="h-3 w-3" /> Cupo (mín – máx)
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={modalExp.min_capacity}
+                  onChange={(e) =>
+                    updateExperience(modalExp.id, { min_capacity: parseInt(e.target.value) || 1 })
+                  }
+                />
+                <span className="text-muted-foreground">–</span>
+                <Input
+                  type="number"
+                  value={modalExp.max_capacity}
+                  onChange={(e) =>
+                    updateExperience(modalExp.id, { max_capacity: parseInt(e.target.value) || 1 })
+                  }
+                />
+              </div>
+            </div>
+
+            {/* Horarios */}
+            <div>
+              <Label className="inline-flex items-center gap-1">
+                <CalendarDays className="h-3 w-3" /> Horarios de salida
+              </Label>
+              <ScheduleEditor
+                value={modalExp.schedules}
+                onChange={(sch) => updateExperience(modalExp.id, { schedules: sch })}
+                tiers={modalExp.tiers}
+                durationHours={modalExp.duration_hours}
+                defaultCapacity={modalExp.max_capacity}
+              />
+            </div>
+
+            {/* Tiers */}
+            <div>
+              <Label className="inline-flex items-center gap-1">
+                <Ticket className="h-3 w-3" /> Tiers (entrada regular, VIP…)
+              </Label>
+              <TierManager
+                value={modalExp.tiers}
+                onChange={(tiers) => updateExperience(modalExp.id, { tiers })}
+              />
+            </div>
+          </div>
         )}
       </Modal>
     </div>
