@@ -4,54 +4,63 @@
 
 @layer base {
   :root {
-    /* Brand — Akiles Travel */
-    --background: 40 30% 99%;
-    --foreground: 12 15% 19%; /* #382f2d ~ warm ink */
+    /* Brand — Akiles Travel 2.0
+       Sunglow #FDBE39 (primary/yellow, protagonista) · Eastern Blue #1BA1A9
+       (teal, acento de apoyo) · Ebony Clay #232538 (ink) · Granny Smith #89999C */
+    --background: 210 33% 99%;
+    --foreground: 234 23% 18%; /* Ebony Clay */
 
     --card: 0 0% 100%;
-    --card-foreground: 12 15% 19%;
+    --card-foreground: 234 23% 18%;
 
-    --primary: 45 100% 50%; /* #ffc600 */
-    --primary-foreground: 12 15% 19%;
+    --primary: 41 97% 61%; /* Sunglow #FDBE39 */
+    --primary-foreground: 234 30% 16%;
 
-    --secondary: 40 20% 96%;
-    --secondary-foreground: 12 15% 19%;
+    --secondary: 210 24% 96%;
+    --secondary-foreground: 234 23% 18%;
 
-    --muted: 40 16% 95%;
-    --muted-foreground: 20 8% 45%;
+    --muted: 210 20% 95%;
+    --muted-foreground: 200 8% 48%; /* Granny Smith */
 
-    --accent: 40 22% 94%;
-    --accent-foreground: 12 15% 19%;
+    --accent: 200 33% 94%;
+    --accent-foreground: 234 23% 18%;
+
+    --teal: 183 72% 38%; /* Eastern Blue #1BA1A9 — acento de apoyo */
+    --teal-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 12% 90%;
-    --input: 30 12% 88%;
-    --ring: 45 100% 50%;
+    --border: 210 18% 90%;
+    --input: 210 18% 88%;
+    --ring: 183 72% 42%; /* teal focus ring */
 
-    --ink: 12 15% 19%;
+    --ink: 234 23% 18%;
 
     --radius: 1rem;
   }
 
   .dark {
-    --background: 15 14% 10%;
-    --foreground: 40 20% 96%;
-    --card: 15 12% 13%;
-    --card-foreground: 40 20% 96%;
-    --primary: 45 100% 50%;
-    --primary-foreground: 12 15% 12%;
-    --secondary: 15 8% 18%;
-    --secondary-foreground: 40 20% 96%;
-    --muted: 15 8% 18%;
-    --muted-foreground: 30 8% 62%;
-    --accent: 15 8% 20%;
-    --accent-foreground: 40 20% 96%;
-    --border: 15 8% 22%;
-    --input: 15 8% 22%;
-    --ring: 45 100% 50%;
-    --ink: 40 20% 96%;
+    --background: 234 20% 11%;
+    --foreground: 210 20% 96%;
+    --card: 234 18% 14%;
+    --card-foreground: 210 20% 96%;
+    --primary: 41 97% 61%;
+    --primary-foreground: 234 30% 14%;
+    --secondary: 234 12% 20%;
+    --secondary-foreground: 210 20% 96%;
+    --muted: 234 12% 20%;
+    --muted-foreground: 200 8% 62%;
+    --accent: 234 12% 22%;
+    --accent-foreground: 210 20% 96%;
+    --teal: 183 60% 44%;
+    --teal-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 234 12% 24%;
+    --input: 234 12% 24%;
+    --ring: 183 60% 46%;
+    --ink: 210 20% 96%;
   }
 
   * {

@@ -39,6 +39,10 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        teal: {
+          DEFAULT: "hsl(var(--teal))",
+          foreground: "hsl(var(--teal-foreground))",
+        },
         ink: "hsl(var(--ink))",
       },
       borderRadius: {
@@ -49,8 +53,8 @@ export default {
         "2xl": "calc(var(--radius) + 10px)",
       },
       fontFamily: {
-        display: ['"Bricolage Grotesque"', "system-ui", "sans-serif"],
-        sans: ['"Host Grotesk"', "system-ui", "sans-serif"],
+        display: ['"Plus Jakarta Sans"', "system-ui", "sans-serif"],
+        sans: ['"Hanken Grotesk"', "system-ui", "sans-serif"],
       },
       keyframes: {
         "fade-in": {
