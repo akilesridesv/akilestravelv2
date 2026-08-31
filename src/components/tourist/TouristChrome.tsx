@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { BadgeCheck, ChevronLeft } from "lucide-react";
+import { Logo } from "@/components/ui/Logo";
 import { cn } from "@/lib/utils";
 
 /** Consistent "back" pill used across tourist pages (bordered, subtle blur). */
@@ -30,11 +31,11 @@ export function TouristHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5 sm:px-8">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary font-display text-lg text-ink">
-            A
-          </div>
-          <span className="font-display text-lg tracking-tight">Akiles Travel</span>
+        <Link to="/" className="flex items-center gap-1.5">
+          <Logo className="h-6" />
+          <span className="font-display text-base font-semibold lowercase tracking-tight text-muted-foreground">
+            travel
+          </span>
         </Link>
         <Link
           to="/vender"
@@ -51,11 +52,9 @@ export function TouristFooter() {
   return (
     <footer className="mt-20 border-t border-border/60">
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 px-5 py-10 text-center text-sm text-muted-foreground sm:px-8">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary font-display text-ink">
-            A
-          </div>
-          <span className="font-display text-base text-foreground">Akiles Travel</span>
+        <div className="flex items-center gap-1.5">
+          <Logo className="h-5" />
+          <span className="font-display text-sm font-semibold lowercase text-muted-foreground">travel</span>
         </div>
         <p>Experiencias curadas y verificadas en El Salvador 🇸🇻</p>
         <Link to="/vender" className="underline underline-offset-4 hover:text-foreground">
