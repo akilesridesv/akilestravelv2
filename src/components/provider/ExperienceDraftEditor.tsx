@@ -6,6 +6,7 @@ import { Input, Textarea, Label } from "@/components/ui/input";
 import { useApp } from "@/state/store";
 import { ImageUploader } from "@/components/provider/ImageUploader";
 import { TierManager } from "@/components/provider/TierManager";
+import { ItineraryEditor } from "@/components/provider/ItineraryEditor";
 import { ScheduleEditor } from "@/components/provider/ScheduleEditor";
 import { DateCalendar } from "@/components/provider/DateCalendar";
 import { DeadlineControl } from "@/components/provider/DeadlineControl";
@@ -32,6 +33,7 @@ import {
   Ban,
   Globe,
   Tag,
+  Route,
 } from "lucide-react";
 
 /**
@@ -59,6 +61,7 @@ export function ExperienceDraftEditor({
   const [d, setD] = useState<ExperienceDraft>(initial);
   const [published, setPublished] = useState(false);
   const [showDates, setShowDates] = useState((initial.date_slots ?? []).length > 0);
+  const [showItinerary, setShowItinerary] = useState((initial.itinerary ?? []).length > 0);
   const [showDetails, setShowDetails] = useState(() =>
     [initial.highlights, initial.whats_included, initial.whats_not_included, initial.what_to_bring].some(
       (a) => (a ?? []).length > 0
@@ -383,6 +386,36 @@ export function ExperienceDraftEditor({
                 onChange={(v) => set("what_to_bring", v)}
                 placeholder="Ej. Ropa cómoda, agua y protector solar"
               />
+            </div>
+          )}
+        </div>
+
+        {/* Qué haremos — itinerary timeline */}
+        <div className="sm:col-span-2">
+          <button
+            type="button"
+            onClick={() => setShowItinerary((s) => !s)}
+            className="flex w-full items-center gap-1.5 text-left"
+          >
+            <Route className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground">
+              Qué haremos: itinerario paso a paso (opcional)
+            </span>
+            {(d.itinerary ?? []).length > 0 && (
+              <span className="rounded-full bg-teal/15 px-2 py-0.5 text-[10px] text-teal">
+                {(d.itinerary ?? []).length}
+              </span>
+            )}
+            <ChevronDown
+              className={cn(
+                "ml-auto h-4 w-4 text-muted-foreground transition-transform",
+                showItinerary && "rotate-180"
+              )}
+            />
+          </button>
+          {showItinerary && (
+            <div className="mt-2 rounded-xl border border-border p-3">
+              <ItineraryEditor value={d.itinerary ?? []} onChange={(v) => set("itinerary", v)} />
             </div>
           )}
         </div>

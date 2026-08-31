@@ -5,8 +5,10 @@ import type { PublicExperience } from "@/data/repo";
 import { ExperienceImage } from "@/components/provider/ExperienceImage";
 import { BookingSheet } from "@/components/tourist/BookingSheet";
 import { TouristHeader, BackLink } from "@/components/tourist/TouristChrome";
+import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { useImageSrc } from "@/hooks/useImageSrc";
+import { useFavorite } from "@/hooks/useFavorites";
 import { bookableDepartures, bookableDates } from "@/lib/availability";
 import { displayPrice } from "@/lib/experience";
 import { formatUSD, parseISODate, dayName, monthName, cn } from "@/lib/utils";
@@ -29,7 +31,12 @@ import {
   ShieldCheck,
   Ban,
   ClipboardCheck,
+  Heart,
+  Image as ImageIcon,
+  Route,
+  Maximize2,
 } from "lucide-react";
+import type { ItineraryStop } from "@/types/domain";
 
 function fmtDate(iso: string): string {
   const d = parseISODate(iso);
@@ -97,7 +104,7 @@ export default function ExperienceDetail() {
 
         <div className="mt-6 grid gap-8 lg:grid-cols-[1.6fr_1fr]">
           {/* Left: all the details */}
-          <div>
+          <div className="min-w-0">
             <h1 className="font-display text-3xl tracking-tight sm:text-4xl">{exp.title}</h1>
             <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
               {(exp.city || exp.area || exp.department || exp.country) && (
@@ -132,10 +139,17 @@ export default function ExperienceDetail() {
               </div>
             )}
 
+            {/* Quick stats — Duración · Precio · Personas (teal accents) */}
+            <StatsRow exp={exp} price={price} />
+
             {/* Provider */}
             {exp.provider && <ProviderStrip provider={exp.provider} verified={verified} />}
 
             {exp.description && <Description text={exp.description} />}
+
+            <GallerySection images={exp.image_urls} featured={exp.featured_image} title={exp.title} />
+
+            {exp.itinerary?.length > 0 && <Itinerary stops={exp.itinerary} />}
 
             {exp.highlights?.length > 0 && (
               <DetailCard icon={<Sparkles className="h-5 w-5 text-primary" />} title="Lo que vivirás">
@@ -190,9 +204,12 @@ export default function ExperienceDetail() {
                     <CalendarDays className="h-4 w-4 text-primary" />
                     Próxima fecha: <span className="font-medium text-foreground">{fmtDate(dates[0])}</span>
                   </p>
-                  <Button size="lg" className="mt-4 w-full" onClick={() => setSheet({ open: true })}>
-                    Ver fechas y reservar
-                  </Button>
+                  <div className="mt-4 flex gap-2">
+                    <Button size="lg" className="flex-1" onClick={() => setSheet({ open: true })}>
+                      Ver fechas y reservar
+                    </Button>
+                    <FavButton id={exp.id} />
+                  </div>
                 </>
               ) : (
                 <p className="mt-4 text-sm text-muted-foreground">
@@ -214,6 +231,7 @@ export default function ExperienceDetail() {
             </p>
             <p className="text-xs text-muted-foreground">por persona</p>
           </div>
+          <FavButton id={exp.id} />
           <Button size="lg" disabled={dates.length === 0} onClick={() => setSheet({ open: true })}>
             Reservar
           </Button>
@@ -233,42 +251,278 @@ export default function ExperienceDetail() {
   );
 }
 
+/** Duración · Precio · Personas — the reference's three-up stat card. */
+function StatsRow({ exp, price }: { exp: PublicExperience; price: { amount: number; from: boolean } }) {
+  const stats = [
+    { label: "Duración", value: `${exp.duration_hours}h` },
+    { label: "Precio", value: `${price.from ? "desde " : ""}${formatUSD(price.amount)}` },
+    { label: "Personas", value: `${exp.min_capacity}–${exp.max_capacity}` },
+  ];
+  return (
+    <div className="mt-5 grid grid-cols-3 divide-x divide-border rounded-2xl border border-border bg-card">
+      {stats.map((s) => (
+        <div key={s.label} className="px-2 py-3 text-center">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{s.label}</p>
+          <p className="mt-1 font-display text-lg leading-tight text-teal">{s.value}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Save-to-favorites heart (per-browser). Teal when active, matching the brand. */
+function FavButton({ id, className = "" }: { id: string; className?: string }) {
+  const { fav, toggle } = useFavorite(id);
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label={fav ? "Quitar de guardados" : "Guardar"}
+      aria-pressed={fav}
+      className={cn(
+        "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition",
+        fav ? "border-teal bg-teal/10 text-teal" : "border-border text-muted-foreground hover:bg-accent",
+        className
+      )}
+    >
+      <Heart className={cn("h-5 w-5", fav && "fill-current")} />
+    </button>
+  );
+}
+
 function Gallery({ images, featured, title }: { images: string[]; featured?: string; title: string }) {
   const all = images?.length ? images : featured ? [featured] : [];
   const [i, setI] = useState(0);
   const main = all[i] ?? featured;
 
   return (
-    <div>
-      <div className="relative overflow-hidden rounded-3xl bg-muted">
-        <ExperienceImage imageRef={main} alt={title} className="aspect-[16/10] w-full sm:aspect-[16/9]" />
-        {all.length > 1 && (
-          <>
-            <GalleryNav side="left" onClick={() => setI((p) => (p - 1 + all.length) % all.length)} />
-            <GalleryNav side="right" onClick={() => setI((p) => (p + 1) % all.length)} />
-            <span className="absolute bottom-3 right-3 rounded-full bg-black/50 px-2.5 py-0.5 text-xs text-white">
-              {i + 1} / {all.length}
-            </span>
-          </>
-        )}
-      </div>
+    <div className="relative overflow-hidden rounded-3xl bg-muted">
+      <ExperienceImage imageRef={main} alt={title} className="aspect-[16/10] w-full sm:aspect-[16/9]" />
       {all.length > 1 && (
-        <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto pb-1">
-          {all.map((ref, idx) => (
-            <button
-              key={ref}
-              onClick={() => setI(idx)}
-              className={cn(
-                "shrink-0 overflow-hidden rounded-xl border-2 transition",
-                idx === i ? "border-ink" : "border-transparent opacity-70 hover:opacity-100"
-              )}
-            >
-              <ExperienceImage imageRef={ref} alt="" className="h-16 w-20" />
-            </button>
-          ))}
-        </div>
+        <>
+          <GalleryNav side="left" onClick={() => setI((p) => (p - 1 + all.length) % all.length)} />
+          <GalleryNav side="right" onClick={() => setI((p) => (p + 1) % all.length)} />
+          {/* Page dots (reference style) */}
+          <div className="absolute inset-x-0 bottom-3 flex justify-center gap-1.5">
+            {all.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setI(idx)}
+                aria-label={`Foto ${idx + 1}`}
+                className={cn(
+                  "h-1.5 rounded-full bg-white transition-all",
+                  idx === i ? "w-5 opacity-100" : "w-1.5 opacity-60 hover:opacity-90"
+                )}
+              />
+            ))}
+          </div>
+        </>
       )}
     </div>
+  );
+}
+
+/** Labeled "Galería" section — horizontal thumbnails that open a lightbox. */
+function GallerySection({ images, featured, title }: { images: string[]; featured?: string; title: string }) {
+  const all = images?.length ? images : featured ? [featured] : [];
+  const [lightbox, setLightbox] = useState<number | null>(null);
+  if (all.length === 0) return null;
+
+  return (
+    <section className="mt-6">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="inline-flex items-center gap-2 font-display text-lg">
+          <ImageIcon className="h-5 w-5 text-primary" /> Galería
+        </h2>
+        <span className="text-xs text-muted-foreground">
+          {all.length} foto{all.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="no-scrollbar flex gap-3 overflow-x-auto pb-1">
+        {all.map((ref, idx) => (
+          <button
+            key={idx}
+            onClick={() => setLightbox(idx)}
+            className="group shrink-0 overflow-hidden rounded-2xl border border-border"
+            aria-label={`Ver foto ${idx + 1}`}
+          >
+            <ExperienceImage
+              imageRef={ref}
+              alt=""
+              className="h-28 w-36 transition duration-300 group-hover:scale-[1.05] sm:h-32 sm:w-44"
+            />
+          </button>
+        ))}
+      </div>
+      {lightbox !== null && (
+        <Lightbox all={all} index={lightbox} onIndex={setLightbox} onClose={() => setLightbox(null)} title={title} />
+      )}
+    </section>
+  );
+}
+
+/** Fullscreen image viewer for the gallery. */
+function Lightbox({
+  all,
+  index,
+  onIndex,
+  onClose,
+  title,
+}: {
+  all: string[];
+  index: number;
+  onIndex: (i: number) => void;
+  onClose: () => void;
+  title: string;
+}) {
+  const src = useImageSrc(all[index]);
+  const prev = () => onIndex((index - 1 + all.length) % all.length);
+  const next = () => onIndex((index + 1) % all.length);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 animate-fade-in"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <button
+        onClick={onClose}
+        aria-label="Cerrar"
+        className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+      >
+        <X className="h-5 w-5" />
+      </button>
+      {all.length > 1 && (
+        <>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              prev();
+            }}
+            aria-label="Anterior"
+            className="absolute left-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+          >
+            <ChevronLeft className="h-6 w-6" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              next();
+            }}
+            aria-label="Siguiente"
+            className="absolute right-4 bottom-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 sm:right-16 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2"
+          >
+            <ChevronRight className="h-6 w-6" />
+          </button>
+        </>
+      )}
+      {src && (
+        <img
+          src={src}
+          alt={title}
+          onClick={(e) => e.stopPropagation()}
+          className="max-h-[85vh] max-w-full rounded-2xl object-contain"
+        />
+      )}
+      {all.length > 1 && (
+        <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-xs text-white">
+          {index + 1} / {all.length}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** "Qué haremos" — the activity's step-by-step plan.
+ *  Horizontal carousel preview + a "Ver completo" modal with the full vertical
+ *  timeline (so nothing is cut off on narrow screens). */
+function Itinerary({ stops }: { stops: ItineraryStop[] }) {
+  const [open, setOpen] = useState(false);
+  if (!stops?.length) return null;
+  return (
+    <section className="mt-6">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <h2 className="inline-flex items-center gap-2 font-display text-lg">
+          <Route className="h-5 w-5 text-primary" /> Qué haremos
+        </h2>
+        <button
+          onClick={() => setOpen(true)}
+          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-medium transition hover:bg-accent"
+        >
+          <Maximize2 className="h-3.5 w-3.5 text-teal" /> Ver completo
+        </button>
+      </div>
+      <p className="mb-3 text-sm text-muted-foreground">Así se desarrolla la experiencia, paso a paso.</p>
+
+      {/* Carousel preview (swipeable) — aligned to the content edge like other blocks */}
+      <div className="no-scrollbar flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2">
+        {stops.map((s, i) => (
+          <div key={s.id} className="w-52 shrink-0 snap-start sm:w-56">
+            {/* Timeline head: numbered dot + connector line */}
+            <div className="mb-2 flex items-center gap-2">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal text-xs font-semibold text-white">
+                {i + 1}
+              </span>
+              {i < stops.length - 1 && <span className="h-0.5 flex-1 rounded-full bg-teal/30" />}
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-border bg-card">
+              {s.image_url && (
+                <ExperienceImage imageRef={s.image_url} alt={s.title} className="h-28 w-full" />
+              )}
+              <div className="p-3">
+                {s.time_range && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-teal/10 px-2 py-0.5 text-[11px] font-medium text-teal">
+                    <Clock className="h-3 w-3" /> {s.time_range}
+                  </span>
+                )}
+                <p className="mt-1.5 font-display text-[15px] leading-tight">{s.title}</p>
+                {s.subtitle && <p className="text-xs text-muted-foreground">{s.subtitle}</p>}
+                {s.detail && (
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-foreground/80">{s.detail}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Modal open={open} onClose={() => setOpen(false)} title="Qué haremos">
+        <p className="mb-4 text-sm text-muted-foreground">Así se desarrolla la experiencia, paso a paso.</p>
+        <ol className="flex flex-col">
+          {stops.map((s, i) => (
+            <li key={s.id} className="flex gap-3">
+              {/* Left rail: numbered dot + vertical connector */}
+              <div className="flex flex-col items-center">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal text-xs font-semibold text-white">
+                  {i + 1}
+                </span>
+                {i < stops.length - 1 && <span className="mt-1 w-0.5 flex-1 rounded-full bg-teal/30" />}
+              </div>
+              {/* Right: the stop card */}
+              <div className={cn("min-w-0 flex-1", i < stops.length - 1 && "pb-5")}>
+                <div className="overflow-hidden rounded-2xl border border-border bg-card">
+                  {s.image_url && (
+                    <ExperienceImage imageRef={s.image_url} alt={s.title} className="h-36 w-full" />
+                  )}
+                  <div className="p-3">
+                    {s.time_range && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-teal/10 px-2 py-0.5 text-[11px] font-medium text-teal">
+                        <Clock className="h-3 w-3" /> {s.time_range}
+                      </span>
+                    )}
+                    <p className="mt-1.5 font-display text-base leading-tight">{s.title}</p>
+                    {s.subtitle && <p className="text-xs text-muted-foreground">{s.subtitle}</p>}
+                    {s.detail && (
+                      <p className="mt-1.5 text-sm leading-relaxed text-foreground/80">{s.detail}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </Modal>
+    </section>
   );
 }
 

@@ -41,6 +41,7 @@ function emptyDraft(): ExperienceDraft {
     registration_deadline_hours: 12,
     schedules: [],
     tiers: [],
+    itinerary: [],
     _sources: {},
   };
 }

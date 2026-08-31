@@ -41,6 +41,7 @@ export function blankDraft(): ExperienceDraft {
     registration_deadline_hours: 12,
     schedules: [],
     tiers: [],
+    itinerary: [],
     _sources: {},
   };
 }
@@ -88,6 +89,7 @@ export function draftToPatch(d: ExperienceDraft): Partial<Experience> {
     featured_image: d.featured_image,
     tiers: d.tiers,
     date_slots: d.date_slots,
+    itinerary: d.itinerary,
     registration_deadline_hours: d.registration_deadline_hours,
     cancellation_policy: d.cancellation_policy,
   };

@@ -255,6 +255,21 @@ export const TOOLS: AgentTool[] = [
         whats_included: { type: "array", items: { type: "string" } },
         whats_not_included: { type: "array", items: { type: "string" } },
         what_to_bring: { type: "array", items: { type: "string" } },
+        itinerary: {
+          type: "array",
+          description:
+            "\"Qué haremos\": ordered stops of the activity, shown to tourists as a timeline.",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string", description: "Stop name, e.g. Parque Bicentenario" },
+              subtitle: { type: "string", description: "e.g. Primera parada" },
+              time_range: { type: "string", description: "e.g. 9:00 - 9:30" },
+              detail: { type: "string", description: "What happens at this stop" },
+            },
+            required: ["title"],
+          },
+        },
       },
     },
     run: (input: any) => applyExperiencePatch(input),
@@ -309,7 +324,12 @@ const EXP_LABELS: Partial<Record<keyof Experience, string>> = {
   whats_included: "incluye",
   whats_not_included: "no incluye",
   what_to_bring: "qué llevar",
+  itinerary: "qué haremos",
 };
+
+function genStopId(): string {
+  return (crypto as any)?.randomUUID?.() ?? `stop_${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export function applyExperiencePatch(input: any): ToolResult {
   const s = useApp.getState();
@@ -321,6 +341,18 @@ export function applyExperiencePatch(input: any): ToolResult {
   // meeting_point is the friendly alias for location_address.
   const src: Record<string, unknown> = { ...input };
   if (src.meeting_point !== undefined) src.location_address = src.meeting_point;
+
+  // Itinerary stops arrive without ids from the LLM — assign stable ones.
+  if (Array.isArray(src.itinerary)) {
+    src.itinerary = (src.itinerary as any[]).map((st) => ({
+      id: st?.id || genStopId(),
+      title: String(st?.title ?? "").trim(),
+      subtitle: st?.subtitle,
+      time_range: st?.time_range,
+      detail: st?.detail,
+      image_url: st?.image_url,
+    }));
+  }
 
   const patch: Partial<Experience> = {};
   const changes: string[] = [];

@@ -145,6 +145,7 @@ function assemble(a: any, sch: any[], tiers: any[], ds: any[]): Experience {
         quantity_available: t.quantity_available ?? 0,
         quantity_sold: t.quantity_sold ?? 0,
       })),
+    itinerary: Array.isArray(a.itinerary) ? a.itinerary : [],
     created_at: a.created_at,
     updated_at: a.updated_at,
   };
@@ -202,6 +203,7 @@ export async function saveExperience(exp: Experience, providerId?: string): Prom
     registration_deadline_hours: exp.registration_deadline_hours,
     cancellation_policy: exp.cancellation_policy ?? null,
     event_date: exp.event_date ?? null,
+    itinerary: exp.itinerary ?? [],
   };
   const up = await c.from("activities").upsert(row);
   if (up.error) throw up.error;
@@ -363,11 +365,22 @@ export async function loadProviderPublicById(
   return { provider, experiences };
 }
 
+export interface Passenger {
+  name: string;
+  email?: string;
+  phone?: string;
+  kind: "adult" | "child";
+}
+
 export interface NewBooking {
   activity_id: string;
   contact_name: string;
   contact_email: string;
   number_of_people: number;
+  adults: number;
+  children: number;
+  passengers: Passenger[];
+  promo_code?: string;
   scheduled_date: string;
   scheduled_time: string;
   subtotal: number;
@@ -402,6 +415,10 @@ export async function createBooking(b: NewBooking): Promise<void> {
     contact_name: b.contact_name,
     contact_email: b.contact_email,
     number_of_people: b.number_of_people,
+    adults: b.adults,
+    children: b.children,
+    passengers: b.passengers,
+    promo_code: b.promo_code ?? null,
     scheduled_date: b.scheduled_date,
     scheduled_time: b.scheduled_time,
     booking_status: b.status,
@@ -423,6 +440,8 @@ function mapBooking(r: any): Booking {
     contact_name: r.contact_name,
     contact_email: r.contact_email,
     number_of_people: r.number_of_people,
+    adults: r.adults ?? undefined,
+    children: r.children ?? undefined,
     scheduled_date: r.scheduled_date ?? "",
     scheduled_time: r.scheduled_time ? r.scheduled_time.slice(0, 5) : "",
     booking_status: r.booking_status,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { usePublishedExperiences } from "@/hooks/usePublicData";
-import { searchExperiences, citiesOf } from "@/ai/discovery";
+import { searchExperiences, citiesOf, categoriesOf } from "@/ai/discovery";
 import { runConciergeTurn, type ConciergeResult } from "@/ai/concierge";
 import { isLLMEnabled } from "@/ai/llm";
 import { bookableDepartures, bookableDates } from "@/lib/availability";
@@ -23,7 +23,28 @@ import {
   Mic,
   BarChart3,
   Cpu,
+  Waves,
+  Mountain,
+  Coffee,
+  Landmark,
+  Utensils,
+  Trees,
+  Building2,
+  Camera,
 } from "lucide-react";
+
+/** Map a free-form category to a friendly icon (fallback = camera). */
+function categoryIcon(cat: string): React.ElementType {
+  const c = cat.toLowerCase();
+  if (/caf[eé]|coffee/.test(c)) return Coffee;
+  if (/playa|mar|surf|lancha|beach|agua|snorkel|buceo/.test(c)) return Waves;
+  if (/aventura|monta|volc[aá]n|hiking|senderismo|rappel|extremo/.test(c)) return Mountain;
+  if (/cultura|hist|museo|arte|colonial|patrimonio/.test(c)) return Landmark;
+  if (/gastro|comida|food|culinar|sabor/.test(c)) return Utensils;
+  if (/natura|eco|bosque|cascada|parque|selva|jard/.test(c)) return Trees;
+  if (/ciudad|urbano|city|scooter|nocturn/.test(c)) return Building2;
+  return Camera;
+}
 
 const QUICK = ["Café", "Playa", "Aventura", "Cultura", "Naturaleza", "Menos de $30"];
 
@@ -63,6 +84,7 @@ export default function TouristHome() {
   const list = data ?? [];
   const [query, setQuery] = useState("");
   const [city, setCity] = useState<string>("");
+  const [category, setCategory] = useState<string>("");
   const [filters, setFilters] = useState<Filters>({ place: "", date: "", people: "" });
   const [showFilters, setShowFilters] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
@@ -81,6 +103,16 @@ export default function TouristHome() {
   }, [query]);
 
   const cities = useMemo(() => citiesOf(list).slice(0, 8), [list]);
+  // Segment by explicit category when available; otherwise fall back to the
+  // most common tags so the browse-by-theme row is always useful.
+  const categories = useMemo(() => {
+    const cats = categoriesOf(list);
+    if (cats.length >= 2) return cats;
+    const seen = new Set<string>(cats);
+    for (const e of list) for (const t of e.tags ?? []) if (t.trim()) seen.add(t.trim());
+    return [...seen].slice(0, 10);
+  }, [list]);
+  const featured = useMemo(() => list.slice(0, 8), [list]);
   const places = useMemo(() => {
     const fromExp = list.flatMap((e) => [e.city, e.department].filter(Boolean) as string[]);
     return [...new Set([...fromExp, ...POPULAR_PLACES])];
@@ -97,8 +129,10 @@ export default function TouristHome() {
   const results = useMemo(() => {
     let r = searchExperiences(list, query);
     if (city) r = r.filter((e) => e.city === city);
+    if (category)
+      r = r.filter((e) => e.category === category || (e.tags ?? []).includes(category));
     return r;
-  }, [list, query, city]);
+  }, [list, query, city, category]);
 
   function buildQuery(): string {
     const parts = [query.trim()];
@@ -389,23 +423,7 @@ export default function TouristHome() {
         </div>
       </section>
 
-      {/* City filter */}
-      {cities.length > 0 && (
-        <div className="mx-auto max-w-6xl px-5 sm:px-8">
-          <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-            <Chip active={!city} onClick={() => setCity("")}>
-              Todas
-            </Chip>
-            {cities.map((c) => (
-              <Chip key={c} active={city === c} onClick={() => setCity(c)}>
-                <MapPin className="h-3.5 w-3.5" /> {c}
-              </Chip>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Grid / concierge results */}
+      {/* Browse / concierge results */}
       <section className="mx-auto max-w-6xl px-5 pt-6 sm:px-8">
         {ai?.loading ? (
           <ConciergeLoading q={ai.q} />
@@ -423,21 +441,67 @@ export default function TouristHome() {
           <SkeletonGrid />
         ) : list.length === 0 ? (
           <Empty />
-        ) : results.length === 0 ? (
-          <p className="py-16 text-center text-muted-foreground">
-            No encontramos experiencias para “{query || city}”. Prueba con otra búsqueda.
-          </p>
         ) : (
           <>
-            <p className="mb-4 text-sm text-muted-foreground">
-              {results.length} experiencia{results.length === 1 ? "" : "s"}
-              {city ? ` en ${city}` : ""}
-            </p>
-            <div className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
-              {results.map((e) => (
-                <ExperienceCard key={e.id} e={e} />
-              ))}
-            </div>
+            {/* Featured rail — shown only when browsing without filters */}
+            {!query && !city && !category && featured.length >= 3 && <FeaturedRail items={featured} />}
+
+            {/* Category segmentation (icon row) */}
+            {categories.length > 0 && (
+              <CategoryRow
+                categories={categories}
+                active={category}
+                onPick={(c) => setCategory((cur) => (cur === c ? "" : c))}
+              />
+            )}
+
+            {/* Location chips */}
+            {cities.length > 0 && (
+              <div className="no-scrollbar mb-5 flex gap-2 overflow-x-auto pb-1">
+                <Chip active={!city} onClick={() => setCity("")}>
+                  Todas
+                </Chip>
+                {cities.map((c) => (
+                  <Chip key={c} active={city === c} onClick={() => setCity(c)}>
+                    <MapPin className="h-3.5 w-3.5" /> {c}
+                  </Chip>
+                ))}
+              </div>
+            )}
+
+            {/* Count + grid */}
+            {results.length === 0 ? (
+              <p className="py-16 text-center text-muted-foreground">
+                No encontramos experiencias{category ? ` de ${category}` : ""}
+                {city ? ` en ${city}` : ""}. Prueba con otra categoría o pregúntale al concierge.
+              </p>
+            ) : (
+              <>
+                <div className="mb-4 flex items-center justify-between gap-2">
+                  <p className="text-sm text-muted-foreground">
+                    {results.length} experiencia{results.length === 1 ? "" : "s"}
+                    {category ? ` · ${category}` : ""}
+                    {city ? ` · ${city}` : ""}
+                  </p>
+                  {(category || city) && (
+                    <button
+                      onClick={() => {
+                        setCategory("");
+                        setCity("");
+                      }}
+                      className="text-xs text-muted-foreground underline underline-offset-2 transition hover:text-foreground"
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
+                  {results.map((e) => (
+                    <ExperienceCard key={e.id} e={e} />
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
       </section>
@@ -532,6 +596,66 @@ function Chip({
     >
       {children}
     </button>
+  );
+}
+
+/** Horizontal "Destacadas" rail — echoes the reference's featured cards. */
+function FeaturedRail({ items }: { items: import("@/data/repo").PublicExperience[] }) {
+  return (
+    <div className="mb-8">
+      <h2 className="mb-3 font-display text-xl tracking-tight">Destacadas</h2>
+      <div className="no-scrollbar -mx-5 flex gap-4 overflow-x-auto px-5 pb-1 sm:mx-0 sm:px-0">
+        {items.map((e) => (
+          <div key={e.id} className="w-40 shrink-0 sm:w-52">
+            <ExperienceCard e={e} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Category segmentation as an icon row (reference "Private cruise" style). */
+function CategoryRow({
+  categories,
+  active,
+  onPick,
+}: {
+  categories: string[];
+  active: string;
+  onPick: (c: string) => void;
+}) {
+  return (
+    <div className="mb-6">
+      <h2 className="mb-3 font-display text-xl tracking-tight">Explora por categoría</h2>
+      <div className="no-scrollbar -mx-5 flex gap-3 overflow-x-auto px-5 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+        {categories.map((cat) => {
+          const Icon = categoryIcon(cat);
+          const on = active === cat;
+          return (
+            <button
+              key={cat}
+              onClick={() => onPick(cat)}
+              aria-pressed={on}
+              className={cn(
+                "flex w-20 shrink-0 flex-col items-center gap-2 rounded-2xl border p-2.5 transition sm:w-24",
+                on ? "border-teal bg-teal/10" : "border-border hover:bg-accent"
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-11 w-11 items-center justify-center rounded-xl transition",
+                  on ? "bg-teal text-white" : "bg-secondary text-teal"
+                )}
+              >
+                <Icon className="h-5 w-5" />
+              </span>
+              <span className="line-clamp-1 text-center text-xs font-medium capitalize">{cat}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

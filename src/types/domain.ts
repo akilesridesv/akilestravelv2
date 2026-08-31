@@ -129,6 +129,16 @@ export interface TicketTier {
   quantity_sold: number;
 }
 
+/** One stop in the "Qué haremos" itinerary shown to tourists as a timeline. */
+export interface ItineraryStop {
+  id: string;
+  title: string; // "Parque Bicentenario"
+  subtitle?: string; // "Primera parada"
+  time_range?: string; // "9:00 - 9:30"
+  detail?: string; // short description of what happens here
+  image_url?: string; // image ref for the stop
+}
+
 export interface Experience {
   id: string;
   provider_profile_id: string;
@@ -167,6 +177,7 @@ export interface Experience {
   schedules: RecurringSchedule[];
   date_slots?: DateSlot[]; // concrete per-date availability (date calendar)
   tiers: TicketTier[];
+  itinerary: ItineraryStop[]; // "Qué haremos" — the activity's step-by-step plan
   created_at: string;
   updated_at: string;
 }
@@ -178,6 +189,8 @@ export interface Booking {
   contact_name: string;
   contact_email: string;
   number_of_people: number;
+  adults?: number;
+  children?: number;
   scheduled_date: string;
   scheduled_time: string;
   booking_status: BookingStatus;
