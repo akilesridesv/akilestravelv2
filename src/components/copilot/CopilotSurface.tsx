@@ -300,13 +300,21 @@ export function CopilotSurface({
       const intent = classifyIntent(value, context);
       switch (intent) {
         case "create_experience": {
-          const { draft, summary, assumptions } = await extractExperience(value);
+          const { draft, summary, assumptions, missing } = await extractExperience(value);
           const blocks: Block[] = [{ type: "text", text: summary }];
           if (assumptions.length) blocks.push({ type: "assumptions", items: assumptions });
           blocks.push({ type: "experience_draft", draft });
+          if (missing.length) {
+            blocks.push({
+              type: "text",
+              text: `Para dejarla lista aún me falta: **${missing.join(
+                "**, **"
+              )}**.\n\nPuedes completarlo en la ficha de arriba, o pásamelo por aquí y lo agrego yo.`,
+            });
+          }
           blocks.push({
             type: "actions",
-            label: "Publícala y luego abre reservas. Toca un ejemplo:",
+            label: missing.length ? "O toca un ejemplo para seguir:" : "Publícala y luego abre reservas. Toca un ejemplo:",
             items: [
               "abre los sábados a las 10am cupo 8",
               "habilita el 5, 8 y 12 de septiembre",
@@ -642,7 +650,7 @@ export function CopilotSurface({
       {convEnabled && (
         <aside
           className={cn(
-            "z-40 flex min-h-0 shrink-0 flex-col bg-secondary/40 transition-all duration-200",
+            "z-40 flex min-h-0 shrink-0 flex-col bg-secondary transition-all duration-200",
             "absolute inset-y-0 left-0 w-64 border-r border-border shadow-xl md:static md:z-auto md:shadow-none",
             historyOpen
               ? "translate-x-0 md:w-64"

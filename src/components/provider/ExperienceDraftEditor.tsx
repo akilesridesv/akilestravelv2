@@ -34,6 +34,7 @@ import {
   Globe,
   Tag,
   Route,
+  Languages,
 } from "lucide-react";
 
 /**
@@ -306,6 +307,28 @@ export function ExperienceDraftEditor({
               ))}
             </div>
           )}
+        </div>
+
+        <div className="sm:col-span-2">
+          <Label className="inline-flex items-center gap-1">
+            <Languages className="h-3 w-3" /> Idiomas
+          </Label>
+          <Input
+            value={(d.languages ?? []).join(", ")}
+            placeholder="Español, Inglés"
+            onChange={(e) =>
+              set(
+                "languages",
+                e.target.value
+                  .split(",")
+                  .map((t) => t.trim())
+                  .filter(Boolean)
+              )
+            }
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Idiomas en que ofreces la experiencia. Se muestran al turista.
+          </p>
         </div>
 
         <div className="sm:col-span-2">

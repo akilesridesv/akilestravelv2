@@ -78,6 +78,16 @@ export function classifyIntent(input: string, context?: string): Intent {
   if (/\btiers?\b/.test(t) && /(agrega|agregar|anade|anadir|crea|crear|pon|poner|quita|quitar|elimina|eliminar|borra|borrar|remueve|remover)/.test(t))
     return "manage_tiers";
 
+  // 1e. Strong creation intent: "quiero subir/crear/publicar una experiencia/tour…".
+  // Must run BEFORE the edit rule because "subir" is also an edit verb ("sube el
+  // precio"); here it's a create because the OBJECT is an offering noun.
+  if (
+    /(subir|sube|crear|crea|publicar|publica|registrar|registra|ofrecer|ofrezco|dar de alta|agregar una|anadir una|nueva|nuevo)\s+(un|una|el|la|mi|otro|otra|nuev[oa])?\s*(tour|experiencia|actividad|paseo|clase|taller|excursion|paquete|servicio|aventura|cata|degustacion|ruta|caminata)/.test(
+      t
+    )
+  )
+    return "create_experience";
+
   // 2. Edit an existing experience (edit verb + a field noun, but not a calendar field)
   if (
     EDIT_VERB.test(t) &&
