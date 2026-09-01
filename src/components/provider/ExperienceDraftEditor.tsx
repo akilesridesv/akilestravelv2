@@ -137,6 +137,14 @@ export function ExperienceDraftEditor({
   const [published, setPublished] = useState(false);
   const [step, setStep] = useState(0);
   const [showDates, setShowDates] = useState((initial.date_slots ?? []).length > 0);
+  // In edit mode the wizard lives inside a Modal. Own the open state so the X /
+  // Escape / backdrop always close it, even when no onCancel prop was passed
+  // (e.g. when opened from the chat surface).
+  const [modalOpen, setModalOpen] = useState(true);
+  const closeModal = () => {
+    setModalOpen(false);
+    onCancel?.();
+  };
 
   // Consume images uploaded from the chat composer's "add images" button and
   // append them to this draft (first mounted editor wins — consume is atomic).
@@ -210,9 +218,9 @@ export function ExperienceDraftEditor({
       </div>
     );
     return isEdit ? (
-      <Modal open onClose={() => onCancel?.()} title="Listo">
+      <Modal open={modalOpen} onClose={closeModal} title="Listo">
         {success}
-        <Button className="mt-4 w-full" onClick={() => onCancel?.()}>
+        <Button className="mt-4 w-full" onClick={closeModal}>
           Cerrar
         </Button>
       </Modal>
@@ -655,8 +663,8 @@ export function ExperienceDraftEditor({
               <ChevronLeft className="h-4 w-4" /> Atrás
             </Button>
           )}
-          {onCancel && step === 0 && (
-            <Button variant="outline" onClick={onCancel}>
+          {(isEdit || onCancel) && step === 0 && (
+            <Button variant="outline" onClick={closeModal}>
               Cancelar
             </Button>
           )}
@@ -677,7 +685,7 @@ export function ExperienceDraftEditor({
   );
 
   return isEdit ? (
-    <Modal open onClose={() => onCancel?.()} title="Editar experiencia">
+    <Modal open={modalOpen} onClose={closeModal} title="Editar experiencia">
       {wizard}
     </Modal>
   ) : (
