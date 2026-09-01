@@ -3,9 +3,11 @@ import { Link } from "react-router-dom";
 import { usePublishedExperiences } from "@/hooks/usePublicData";
 import { searchExperiences, citiesOf, categoriesOf } from "@/ai/discovery";
 import { runConciergeTurn, type ConciergeResult } from "@/ai/concierge";
+import { heuristicShelves, generateShelves, type Shelf } from "@/ai/shelves";
 import { isLLMEnabled } from "@/ai/llm";
 import { bookableDepartures, bookableDates } from "@/lib/availability";
 import { ExperienceCard } from "@/components/tourist/ExperienceCard";
+import { Cartelera } from "@/components/tourist/Cartelera";
 import { TouristHeader, TouristFooter } from "@/components/tourist/TouristChrome";
 import { Markdown } from "@/components/ui/Markdown";
 import { cn } from "@/lib/utils";
@@ -112,7 +114,26 @@ export default function TouristHome() {
     for (const e of list) for (const t of e.tags ?? []) if (t.trim()) seen.add(t.trim());
     return [...seen].slice(0, 10);
   }, [list]);
-  const featured = useMemo(() => list.slice(0, 8), [list]);
+  // "Cartelera" shelves: instant heuristic, upgraded with AI titles/grouping.
+  const [shelves, setShelves] = useState<Shelf[]>([]);
+  const catalogKey = useMemo(() => list.map((e) => e.id).join(","), [list]);
+  useEffect(() => {
+    if (!list.length) {
+      setShelves([]);
+      return;
+    }
+    setShelves(heuristicShelves(list));
+    if (!isLLMEnabled) return;
+    let alive = true;
+    generateShelves(list)
+      .then((s) => alive && s.length && setShelves(s))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogKey]);
+
   const places = useMemo(() => {
     const fromExp = list.flatMap((e) => [e.city, e.department].filter(Boolean) as string[]);
     return [...new Set([...fromExp, ...POPULAR_PLACES])];
@@ -443,9 +464,6 @@ export default function TouristHome() {
           <Empty />
         ) : (
           <>
-            {/* Featured rail — shown only when browsing without filters */}
-            {!query && !city && !category && featured.length >= 3 && <FeaturedRail items={featured} />}
-
             {/* Category segmentation (icon row) */}
             {categories.length > 0 && (
               <CategoryRow
@@ -469,8 +487,11 @@ export default function TouristHome() {
               </div>
             )}
 
-            {/* Count + grid */}
-            {results.length === 0 ? (
+            {/* No filters → the AI-curated "cartelera" (Netflix-style rows).
+                Any filter/search → the flat results grid. */}
+            {!query && !city && !category ? (
+              <Cartelera list={list} shelves={shelves.length ? shelves : heuristicShelves(list)} />
+            ) : results.length === 0 ? (
               <p className="py-16 text-center text-muted-foreground">
                 No encontramos experiencias{category ? ` de ${category}` : ""}
                 {city ? ` en ${city}` : ""}. Prueba con otra categoría o pregúntale al concierge.
@@ -596,22 +617,6 @@ function Chip({
     >
       {children}
     </button>
-  );
-}
-
-/** Horizontal "Destacadas" rail — echoes the reference's featured cards. */
-function FeaturedRail({ items }: { items: import("@/data/repo").PublicExperience[] }) {
-  return (
-    <div className="mb-8">
-      <h2 className="mb-3 font-display text-xl tracking-tight">Destacadas</h2>
-      <div className="no-scrollbar -mx-5 flex gap-4 overflow-x-auto px-5 pb-1 sm:mx-0 sm:px-0">
-        {items.map((e) => (
-          <div key={e.id} className="w-40 shrink-0 sm:w-52">
-            <ExperienceCard e={e} />
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 

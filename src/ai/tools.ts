@@ -250,6 +250,11 @@ export const TOOLS: AgentTool[] = [
         description: { type: "string" },
         price_per_person: { type: "number" },
         duration_hours: { type: "number" },
+        category: {
+          type: "string",
+          description:
+            "Category of the experience, e.g. Aventura y adrenalina, Playa y surf, Café y fincas, Cultura e historia, Pueblos mágicos, Gastronomía, City tour.",
+        },
         country: { type: "string" },
         department: { type: "string", description: "State/department, e.g. La Libertad" },
         city: { type: "string" },
@@ -371,6 +376,7 @@ const EXP_LABELS: Partial<Record<keyof Experience, string>> = {
   description: "descripción",
   price_per_person: "precio",
   duration_hours: "duración",
+  category: "categoría",
   country: "país",
   department: "departamento",
   city: "ciudad",

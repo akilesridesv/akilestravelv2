@@ -72,6 +72,8 @@ export function draftToPatch(d: ExperienceDraft): Partial<Experience> {
     description: d.description,
     price_per_person: d.price_per_person,
     duration_hours: d.duration_hours,
+    category: d.category,
+    languages: d.languages,
     tags: d.tags,
     country: d.country,
     department: d.department,

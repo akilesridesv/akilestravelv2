@@ -14,6 +14,7 @@ import { DeadlineControl } from "@/components/provider/DeadlineControl";
 import { draftToPatch } from "@/lib/experience";
 import { writeDescription } from "@/ai/writeDescription";
 import { COUNTRIES, departmentsOf } from "@/lib/geo";
+import { EXPERIENCE_CATEGORIES } from "@/lib/categories";
 import { notify } from "@/state/toast";
 import { useDraftImages } from "@/state/draftImages";
 import { formatUSD, cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ import {
   Ban,
   Globe,
   Tag,
+  Shapes,
   Route,
   Languages,
   Loader2,
@@ -302,6 +304,31 @@ export function ExperienceDraftEditor({
             <div className="sm:col-span-2">
               <Label className="inline-flex items-center gap-1">Título {!d.title.trim() && <Req />}</Label>
               <Input value={d.title} onChange={(e) => set("title", e.target.value)} />
+            </div>
+
+            <div className="sm:col-span-2">
+              <Label className="inline-flex items-center gap-1">
+                <Shapes className="h-3 w-3" /> Categoría {!d.category && <Dot />}
+              </Label>
+              <select
+                value={d.category ?? ""}
+                onChange={(e) => set("category", e.target.value)}
+                className="h-9 w-full rounded-xl border border-input bg-card px-2 text-sm"
+              >
+                <option value="">Selecciona una categoría…</option>
+                {EXPERIENCE_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+                {d.category && !EXPERIENCE_CATEGORIES.includes(d.category as any) && (
+                  <option value={d.category}>{d.category}</option>
+                )}
+              </select>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Agrupa tu experiencia en la cartelera y ayuda a los turistas (y al concierge de IA) a
+                encontrarte.
+              </p>
             </div>
 
             <div>

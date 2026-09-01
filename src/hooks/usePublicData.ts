@@ -30,7 +30,11 @@ export function usePublishedExperiences() {
     return () => {
       alive = false;
     };
-  }, [localExps, localProv]);
+    // Remote mode fetches via RLS and ignores the provider store, so it must NOT
+    // re-run when that store churns (e.g. an auth refresh re-seeds it) — only the
+    // local fallback tracks localExps/localProv.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSupabaseConfigured ? "" : localExps, isSupabaseConfigured ? "" : localProv]);
 
   return { data, loading, error };
 }
@@ -61,7 +65,10 @@ export function usePublishedExperience(id?: string) {
     return () => {
       alive = false;
     };
-  }, [id, local, localProv]);
+    // See note above: remote mode depends only on `id`; local mode also tracks
+    // its store copy so provider edits show immediately.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isSupabaseConfigured ? "" : local, isSupabaseConfigured ? "" : localProv]);
 
   return { data, loading };
 }
@@ -99,7 +106,9 @@ export function useProviderPublic(id?: string) {
     return () => {
       alive = false;
     };
-  }, [id, localProv, localExps]);
+    // See note above: remote mode depends only on `id`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isSupabaseConfigured ? "" : localProv, isSupabaseConfigured ? "" : localExps]);
 
   return { data, loading };
 }

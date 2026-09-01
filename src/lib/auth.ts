@@ -86,12 +86,23 @@ export async function authUpdatePassword(password: string): Promise<AuthResult> 
 export function initAuth(): () => void {
   if (!isSupabaseConfigured || !supabase) return () => {};
   const c = supabase;
+  // Supabase re-emits SIGNED_IN on token refresh and when the tab regains focus,
+  // and getSession() + the listener both fire on load. Bootstrapping on each one
+  // replaces the store's experiences/provider arrays, which makes data hooks
+  // refetch and the UI flash. Load each user only once; reset on sign-out.
+  let loadedUserId: string | null = null;
+  const boot = (user: LocalUser) => {
+    if (loadedUserId === user.id) return;
+    loadedUserId = user.id;
+    bootstrapSession(user).catch((e) => {
+      console.error(e);
+      loadedUserId = null; // allow a retry if the load failed
+      useApp.getState().setAuthReady();
+    });
+  };
   c.auth.getSession().then(({ data }) => {
     if (data.session?.user) {
-      bootstrapSession(sessionUser(data.session.user)).catch((e) => {
-        console.error(e);
-        useApp.getState().setAuthReady();
-      });
+      boot(sessionUser(data.session.user));
     } else {
       // No session in remote mode: drop any stale local user and require login.
       useApp.getState().signOut();
@@ -100,8 +111,9 @@ export function initAuth(): () => void {
   });
   const { data: sub } = c.auth.onAuthStateChange((event, session) => {
     if (event === "SIGNED_IN" && session?.user) {
-      bootstrapSession(sessionUser(session.user)).catch(console.error);
+      boot(sessionUser(session.user));
     } else if (event === "SIGNED_OUT") {
+      loadedUserId = null;
       useApp.getState().signOut();
     }
   });
