@@ -10,6 +10,7 @@ import { ScheduleEditor } from "@/components/provider/ScheduleEditor";
 import { TierManager } from "@/components/provider/TierManager";
 import { TodayAgenda, DatedAgenda } from "@/components/provider/WeekAgenda";
 import { DateCalendar } from "@/components/provider/DateCalendar";
+import { shareTicket, shareTicketPdf, type TicketData } from "@/components/tourist/Ticket";
 import { Modal } from "@/components/ui/modal";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { Pagination } from "@/components/ui/Pagination";
@@ -45,6 +46,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Share2,
+  FileDown,
   Ticket,
   Check as CheckIcon,
 } from "lucide-react";
@@ -290,11 +292,21 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
 
   const resetPage = () => setPage(0);
 
+  // Group the (filtered) reservations by date for the calendar/agenda view.
+  const byDate = new Map<string, Booking[]>();
+  for (const b of [...filtered].sort((a, b) =>
+    (a.scheduled_time || "").localeCompare(b.scheduled_time || "")
+  )) {
+    const k = b.scheduled_date || "Sin fecha";
+    (byDate.get(k) ?? byDate.set(k, []).get(k)!).push(b);
+  }
+  const dateKeys = [...byDate.keys()].sort();
+
   return (
     <div className="grid grid-cols-1 gap-3">
       <div className="grid gap-2">
         <div className="flex items-center justify-between gap-2">
-          {view === "list" && bookings.length > 0 ? (
+          {bookings.length > 0 ? (
             <div className="min-w-0 flex-1">
               <SearchBar
                 value={query}
@@ -319,12 +331,12 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
                   view === v ? "bg-ink text-background" : "text-muted-foreground hover:bg-accent"
                 )}
               >
-                {v === "list" ? "Reservas" : "Calendario"}
+                {v === "list" ? "Lista" : "Calendario"}
               </button>
             ))}
           </div>
         </div>
-        {view === "list" && bookings.length > 0 && (
+        {bookings.length > 0 && (
           <div className="flex flex-wrap gap-2">
             <select
               value={statusF}
@@ -362,16 +374,38 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
         )}
       </div>
 
-      {view === "calendar" ? (
-        // The experiences calendar (all + individual): view and edit cupos, tiers,
-        // horarios and fechas of your departures.
-        <CalendarPanel />
-      ) : bookings.length === 0 ? (
+      {bookings.length === 0 ? (
         <EmptyState
           icon={<Inbox className="h-8 w-8" />}
           title="Sin reservas todavía"
-          hint="Cuando un turista reserve, aparecerá aquí. Mientras, toca “Calendario” para ver y ajustar tus salidas."
+          hint="Cuando un turista reserve una de tus experiencias, aparecerá aquí para que le des seguimiento. Los cupos y horarios se gestionan en Experiencias."
         />
+      ) : view === "calendar" ? (
+        filtered.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Sin reservas con estos filtros.
+          </p>
+        ) : (
+          dateKeys.map((k) => {
+            const dayBookings = byDate.get(k)!;
+            const people = dayBookings.reduce((n, b) => n + (b.number_of_people || 0), 0);
+            return (
+              <div key={k} className="rounded-2xl border border-border bg-card p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-medium capitalize">{fmtAgendaDate(k)}</p>
+                  <span className="text-xs text-muted-foreground">
+                    {dayBookings.length} reserva{dayBookings.length === 1 ? "" : "s"} · {people} pers
+                  </span>
+                </div>
+                <div className="grid gap-2">
+                  {dayBookings.map((b) => (
+                    <BookingRow key={b.id} b={b} onOpen={() => setModalId(b.id)} />
+                  ))}
+                </div>
+              </div>
+            );
+          })
+        )
       ) : (
         <>
           {items.map((b) => (
@@ -448,6 +482,16 @@ function BookingDetail({
       <span className="text-right text-sm font-medium">{value}</span>
     </div>
   );
+  const ticketData: TicketData = {
+    code: b.confirmation_code,
+    confirmed: b.booking_status === "confirmed",
+    title: b.experience_title,
+    date: b.scheduled_date,
+    time: b.scheduled_time,
+    peopleLabel: `${b.number_of_people} persona${b.number_of_people === 1 ? "" : "s"}`,
+    holderName: b.contact_name,
+    total: b.total_paid,
+  };
   return (
     <div className="grid gap-3">
       <div className="flex items-center gap-2">
@@ -473,6 +517,22 @@ function BookingDetail({
           </Button>
         </div>
       )}
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          className="flex-1"
+          onClick={() => shareTicket(ticketData)}
+        >
+          <Share2 className="h-4 w-4" /> Compartir
+        </Button>
+        <Button
+          variant="outline"
+          className="flex-1"
+          onClick={() => shareTicketPdf(ticketData)}
+        >
+          <FileDown className="h-4 w-4" /> PDF
+        </Button>
+      </div>
     </div>
   );
 }
@@ -492,6 +552,32 @@ function BookingBadge({ status }: { status: Booking["booking_status"] }) {
   return <Badge tone={v.tone}>{v.label}</Badge>;
 }
 
+/** Human date header for the reservations agenda ("Vie 4 de septiembre"). */
+function fmtAgendaDate(iso: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const d = parseISODate(iso);
+  const dn = dayName(d.getDay()).slice(0, 3);
+  return `${dn} ${d.getDate()} de ${monthName(d.getMonth())}`;
+}
+
+/** One reservation row in the agenda: time · client · people, opens the detail. */
+function BookingRow({ b, onOpen }: { b: Booking; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-2 rounded-lg bg-muted/50 px-2.5 py-2 text-left transition hover:bg-muted"
+    >
+      <span className="shrink-0 font-display text-sm tabular-nums">{b.scheduled_time || "—"}</span>
+      <span className="min-w-0 flex-1 truncate text-sm">
+        <span className="font-medium">{b.contact_name}</span>
+        <span className="text-muted-foreground"> · {b.experience_title}</span>
+      </span>
+      <span className="shrink-0 text-xs text-muted-foreground">{b.number_of_people} pers</span>
+      <BookingBadge status={b.booking_status} />
+    </button>
+  );
+}
 
 // --------------------------------------------------------------------------
 
@@ -561,6 +647,7 @@ export function CalendarPanel() {
   const [range, setRange] = useState<CalRange>("week");
   const [filterId, setFilterId] = useState<string>(""); // "" = all
   const [modalId, setModalId] = useState<string | null>(null);
+  const [dayIso, setDayIso] = useState<string | null>(null); // date-slot editor day
   const [weekStart, setWeekStart] = useState(() => mondayOf(todayISO()));
   const [from, setFrom] = useState(() => todayISO());
   const [to, setTo] = useState(() => addDaysISO(todayISO(), 14));
@@ -619,7 +706,12 @@ export function CalendarPanel() {
       </div>
 
       {range === "today" && (
-        <DatedAgenda experiences={shown} dates={[todayISO()]} onSelect={setModalId} />
+        <DatedAgenda
+          experiences={shown}
+          dates={[todayISO()]}
+          onSelect={setModalId}
+          onDayEdit={selectedExp ? setDayIso : undefined}
+        />
       )}
 
       {range === "week" && (
@@ -653,6 +745,7 @@ export function CalendarPanel() {
             experiences={shown}
             dates={datesBetween(weekStart, weekEnd, 7)}
             onSelect={setModalId}
+            onDayEdit={selectedExp ? setDayIso : undefined}
           />
         </>
       )}
@@ -684,6 +777,7 @@ export function CalendarPanel() {
             experiences={shown}
             dates={datesBetween(from < to ? from : to, from < to ? to : from)}
             onSelect={setModalId}
+            onDayEdit={selectedExp ? setDayIso : undefined}
           />
         </>
       )}
@@ -693,6 +787,8 @@ export function CalendarPanel() {
           <DateCalendar
             experience={selectedExp}
             onChange={(ds) => updateExperience(selectedExp.id, { date_slots: ds })}
+            onDayOpen={setDayIso}
+            onTiers={(tiers) => updateExperience(selectedExp.id, { tiers })}
           />
         ) : (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border px-6 py-10 text-center">
@@ -758,6 +854,189 @@ export function CalendarPanel() {
           </div>
         )}
       </Modal>
+
+      {/* Date-specific departures for one day (habilitar / editar / borrar) */}
+      {selectedExp && dayIso && (
+        <DaySlots
+          exp={selectedExp}
+          iso={dayIso}
+          onClose={() => setDayIso(null)}
+          onChange={(ds) => updateExperience(selectedExp.id, { date_slots: ds })}
+          onTiers={(tiers) => updateExperience(selectedExp.id, { tiers })}
+          onSchedules={(sch) => updateExperience(selectedExp.id, { schedules: sch })}
+        />
+      )}
     </div>
+  );
+}
+
+/** Add / edit / delete date-specific departures (date_slots) + tiers, in one window. */
+function DaySlots({
+  exp,
+  iso,
+  onClose,
+  onChange,
+  onTiers,
+  onSchedules,
+}: {
+  exp: Experience;
+  iso: string;
+  onClose: () => void;
+  onChange: (slots: import("@/types/domain").DateSlot[]) => void;
+  onTiers: (tiers: Experience["tiers"]) => void;
+  onSchedules: (schedules: Experience["schedules"]) => void;
+}) {
+  const all = exp.date_slots ?? [];
+  const others = all.filter((s) => s.slot_date !== iso);
+  const daySlots = all.filter((s) => s.slot_date === iso);
+  const dow = parseISODate(iso).getDay();
+  const recurring = exp.schedules.filter((s) => s.day_of_week === dow);
+  const d = parseISODate(iso);
+  const title = `${dayName(d.getDay())} ${d.getDate()} de ${monthName(d.getMonth())}`;
+
+  const commit = (next: import("@/types/domain").DateSlot[]) => onChange([...others, ...next]);
+  const patchSched = (id: string, p: Partial<Experience["schedules"][number]>) =>
+    onSchedules(exp.schedules.map((s) => (s.id === id ? { ...s, ...p } : s)));
+  const delSched = (id: string) => onSchedules(exp.schedules.filter((s) => s.id !== id));
+  const add = () =>
+    commit([
+      ...daySlots,
+      {
+        id: uid("ds"),
+        slot_date: iso,
+        start_time: "09:00",
+        end_time: addHours("09:00", exp.duration_hours || 2),
+        capacity: exp.max_capacity || 10,
+        status: "open",
+      },
+    ]);
+  const patch = (id: string, p: Partial<import("@/types/domain").DateSlot>) =>
+    commit(daySlots.map((s) => (s.id === id ? { ...s, ...p } : s)));
+  const remove = (id: string) => commit(daySlots.filter((s) => s.id !== id));
+
+  return (
+    <Modal open onClose={onClose} title={`Salidas · ${title}`}>
+      <div className="grid gap-4">
+        <p className="text-sm text-muted-foreground">
+          Salidas y cupos de <b className="text-foreground">{exp.title}</b> para este día. Ajusta la
+          hora y el cupo, o bórralas.
+        </p>
+
+        {/* Recurring departures on this weekday — editable (apply every week) */}
+        {recurring.length > 0 && (
+          <div className="grid gap-2">
+            {recurring.map((s) => (
+              <div key={s.id} className="rounded-xl border border-border p-2.5">
+                <div className="mb-1.5">
+                  <span className="rounded-full bg-teal/15 px-2 py-0.5 text-[10px] font-medium text-teal">
+                    Recurrente · todas las semanas
+                  </span>
+                </div>
+                <div className="flex items-end gap-2">
+                  <div>
+                    <Label className="inline-flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> Hora
+                    </Label>
+                    <Input
+                      type="time"
+                      value={s.start_time}
+                      onChange={(e) =>
+                        patchSched(s.id, {
+                          start_time: e.target.value,
+                          end_time: addHours(e.target.value, exp.duration_hours || 2),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="w-24">
+                    <Label className="inline-flex items-center gap-1">
+                      <Users className="h-3 w-3" /> Cupo
+                    </Label>
+                    <Input
+                      type="number"
+                      value={s.capacity}
+                      onChange={(e) => patchSched(s.id, { capacity: parseInt(e.target.value) || 1 })}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => delSched(s.id)}
+                    aria-label="Borrar salida recurrente"
+                    className="mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Date-specific departures (only this date) */}
+        {daySlots.map((s) => (
+          <div key={s.id} className="rounded-xl border border-border p-2.5">
+            <div className="mb-1.5">
+              <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-medium text-ink">
+                Solo esta fecha
+              </span>
+            </div>
+            <div className="flex items-end gap-2">
+              <div>
+                <Label className="inline-flex items-center gap-1">
+                  <Clock className="h-3 w-3" /> Hora
+                </Label>
+                <Input
+                  type="time"
+                  value={s.start_time}
+                  onChange={(e) =>
+                    patch(s.id, {
+                      start_time: e.target.value,
+                      end_time: addHours(e.target.value, exp.duration_hours || 2),
+                    })
+                  }
+                />
+              </div>
+              <div className="w-24">
+                <Label className="inline-flex items-center gap-1">
+                  <Users className="h-3 w-3" /> Cupo
+                </Label>
+                <Input
+                  type="number"
+                  value={s.capacity}
+                  onChange={(e) => patch(s.id, { capacity: parseInt(e.target.value) || 1 })}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => remove(s.id)}
+                aria-label="Borrar salida"
+                className="mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {recurring.length === 0 && daySlots.length === 0 && (
+          <p className="text-sm text-muted-foreground">Este día no tiene salidas habilitadas.</p>
+        )}
+
+        <Button variant="outline" onClick={add}>
+          <Plus className="h-4 w-4" /> Habilitar salida solo en esta fecha
+        </Button>
+
+        {/* Tiers — same window (aplican a toda la experiencia) */}
+        <div className="border-t border-border pt-4">
+          <Label className="inline-flex items-center gap-1">
+            <Ticket className="h-3 w-3" /> Tiers (entrada regular, VIP…)
+          </Label>
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            Los tiers aplican a toda la experiencia, no solo a esta fecha.
+          </p>
+          <TierManager value={exp.tiers} onChange={onTiers} />
+        </div>
+      </div>
+    </Modal>
   );
 }

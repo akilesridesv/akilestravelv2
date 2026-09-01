@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { bookableDepartures, bookableDates, departuresOn, type Departure } from "@/lib/availability";
 import { BookingCalendar } from "@/components/tourist/BookingCalendar";
+import { Ticket } from "@/components/tourist/Ticket";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { useApp } from "@/state/store";
 import * as repo from "@/data/repo";
@@ -41,11 +42,13 @@ const PROMOS: Record<string, { kind: "pct" | "flat"; value: number; label: strin
   BIENVENIDO: { kind: "flat", value: 5, label: "$5 de descuento" },
 };
 
+// Unique registration code that always mixes letters AND numbers (e.g. AKT-QWK728).
 function genCode(): string {
-  const s = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let r = "";
-  for (let i = 0; i < 6; i++) r += s[Math.floor(Math.random() * s.length)];
-  return `AKT-${r}`;
+  const L = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const N = "23456789";
+  const pick = (set: string, n: number) =>
+    Array.from({ length: n }, () => set[Math.floor(Math.random() * set.length)]).join("");
+  return `AKT-${pick(L, 3)}${pick(N, 3)}`;
 }
 
 function dateChip(iso: string): string {
@@ -584,19 +587,45 @@ export function BookingSheet({
 
           {/* ---------------- DONE / TICKET ---------------- */}
           {step === "done" && (
-            <Ticket
-              code={code}
-              status={finalStatus}
-              experience={experience}
-              date={date}
-              time={time}
-              adults={adults}
-              children={children}
-              tierName={tier?.tier_name}
-              total={total}
-              contactName={contact?.name.trim() || ""}
-              onClose={onClose}
-            />
+            <div className="flex min-w-0 flex-col gap-4">
+              <div className="text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary text-ink">
+                  <Check className="h-6 w-6" />
+                </div>
+                <p className="mt-2 font-display text-lg">
+                  {finalStatus === "confirmed" ? "¡Reserva confirmada!" : "¡Solicitud enviada!"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {finalStatus === "confirmed"
+                    ? "Presenta este ticket el día de tu experiencia."
+                    : "El proveedor confirmará muy pronto. Guarda tu ticket."}
+                </p>
+              </div>
+
+              <Ticket
+                data={{
+                  code,
+                  confirmed: finalStatus === "confirmed",
+                  title: experience.title,
+                  coverImage: experience.featured_image,
+                  date,
+                  time,
+                  peopleLabel: `${adults} adulto${adults === 1 ? "" : "s"}${
+                    children > 0 ? ` · ${children} niño${children === 1 ? "" : "s"}` : ""
+                  }`,
+                  holderName: contact?.name.trim() || undefined,
+                  meetingPoint: experience.location_address || undefined,
+                  tierName: tier?.tier_name,
+                  total,
+                  whatsapp: experience.provider?.whatsapp,
+                  contactEmail: experience.provider?.contact_email,
+                }}
+              />
+
+              <Button variant="outline" className="w-full" onClick={onClose}>
+                Listo
+              </Button>
+            </div>
           )}
         </div>
       )}
@@ -669,185 +698,6 @@ function Counter({
           <Plus className="h-4 w-4" />
         </button>
       </div>
-    </div>
-  );
-}
-
-// Deterministic decorative barcode derived from the confirmation code.
-function Barcode({ code }: { code: string }) {
-  let seed = 0;
-  for (let i = 0; i < code.length; i++) seed = (seed * 31 + code.charCodeAt(i)) >>> 0;
-  const bars: { w: number; on: boolean }[] = [];
-  for (let i = 0; i < 48; i++) {
-    seed = (seed * 1103515245 + 12345) >>> 0;
-    bars.push({ w: 1 + ((seed >> 3) % 3), on: (seed >> 6) % 3 !== 0 });
-  }
-  return (
-    <div className="flex h-14 items-stretch gap-[2px]" aria-hidden>
-      {bars.map((b, i) => (
-        <span
-          key={i}
-          style={{ width: `${b.w * 2}px` }}
-          className={b.on ? "bg-ink" : "bg-transparent"}
-        />
-      ))}
-    </div>
-  );
-}
-
-function Ticket({
-  code,
-  status,
-  experience,
-  date,
-  time,
-  adults,
-  children,
-  tierName,
-  total,
-  contactName,
-  onClose,
-}: {
-  code: string;
-  status: Booking["booking_status"];
-  experience: PublicExperience;
-  date: string;
-  time: string;
-  adults: number;
-  children: number;
-  tierName?: string;
-  total: number;
-  contactName: string;
-  onClose: () => void;
-}) {
-  const confirmed = status === "confirmed";
-  return (
-    <div className="flex min-w-0 flex-col gap-4">
-      <div className="text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary text-ink">
-          <Check className="h-6 w-6" />
-        </div>
-        <p className="mt-2 font-display text-lg">
-          {confirmed ? "¡Reserva confirmada!" : "¡Solicitud enviada!"}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          {confirmed
-            ? "Presenta este ticket el día de tu experiencia."
-            : "El proveedor confirmará muy pronto. Guarda tu ticket."}
-        </p>
-      </div>
-
-      {/* Ticket card */}
-      <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
-        {/* Header band */}
-        <div className="flex items-center justify-between bg-ink px-5 py-3 text-background">
-          <span className="inline-flex items-center gap-1.5 font-display text-sm">
-            <TicketIcon className="h-4 w-4 text-primary" /> Akiles Travel
-          </span>
-          <span
-            className={cn(
-              "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
-              confirmed ? "bg-primary text-ink" : "bg-background/15 text-background"
-            )}
-          >
-            {confirmed ? "Confirmado" : "Pendiente"}
-          </span>
-        </div>
-
-        <div className="p-5">
-          <p className="font-display text-base leading-tight">{experience.title}</p>
-          {tierName && <p className="mt-0.5 text-xs text-muted-foreground">{tierName}</p>}
-
-          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-            <Field label="Fecha" value={fullDate(date)} />
-            <Field label="Hora" value={time} />
-            <Field label="Titular" value={contactName || "—"} />
-            <Field
-              label="Personas"
-              value={`${adults} adulto${adults === 1 ? "" : "s"}${
-                children > 0 ? ` · ${children} niño${children === 1 ? "" : "s"}` : ""
-              }`}
-            />
-            {experience.location_address && (
-              <MeetingField value={experience.location_address} />
-            )}
-            <Field label="Total" value={formatUSD(total)} />
-          </div>
-        </div>
-
-        {/* Perforated divider */}
-        <div className="relative flex items-center">
-          <span className="absolute -left-3 h-6 w-6 rounded-full bg-background" />
-          <span className="absolute -right-3 h-6 w-6 rounded-full bg-background" />
-          <div className="mx-5 flex-1 border-t-2 border-dashed border-border" />
-        </div>
-
-        {/* Barcode + code */}
-        <div className="flex flex-col items-center gap-2 p-5">
-          <Barcode code={code} />
-          <div className="text-center">
-            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Número de registro</p>
-            <p className="font-display text-xl tracking-[0.2em]">{code}</p>
-          </div>
-        </div>
-      </div>
-
-      {(experience.provider?.whatsapp || experience.provider?.contact_email) && (
-        <div className="flex flex-wrap justify-center gap-2">
-          {experience.provider?.whatsapp && (
-            <a
-              href={`https://wa.me/${experience.provider.whatsapp.replace(/[^\d]/g, "")}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm transition hover:bg-accent"
-            >
-              <MessageCircle className="h-4 w-4" /> WhatsApp
-            </a>
-          )}
-          {experience.provider?.contact_email && (
-            <a
-              href={`mailto:${experience.provider.contact_email}`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm transition hover:bg-accent"
-            >
-              <Mail className="h-4 w-4" /> Correo
-            </a>
-          )}
-        </div>
-      )}
-
-      <Button className="w-full" onClick={onClose}>
-        Listo
-      </Button>
-    </div>
-  );
-}
-
-function MeetingField({ value }: { value: string }) {
-  const isUrl = /^https?:\/\//i.test(value.trim());
-  return (
-    <div className="col-span-2">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Punto de encuentro</p>
-      {isUrl ? (
-        <a
-          href={value.trim()}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 font-medium text-teal underline-offset-2 hover:underline"
-        >
-          <MapPin className="h-3.5 w-3.5" /> Ver ubicación en el mapa
-        </a>
-      ) : (
-        <p className="font-medium">{value}</p>
-      )}
-    </div>
-  );
-}
-
-function Field({ label, value, full }: { label: string; value: string; full?: boolean }) {
-  return (
-    <div className={full ? "col-span-2" : ""}>
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="font-medium">{value}</p>
     </div>
   );
 }

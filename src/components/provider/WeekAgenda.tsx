@@ -1,6 +1,6 @@
 import type { Experience } from "@/types/domain";
 import { dayName, todayISO, parseISODate, cn } from "@/lib/utils";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Plus, Pencil } from "lucide-react";
 
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
 
@@ -138,14 +138,18 @@ export function DatedAgenda({
   experiences,
   dates,
   onSelect,
+  onDayEdit,
 }: {
   experiences: Experience[];
   dates: string[];
   onSelect?: (expId: string) => void;
+  /** When set, each day shows a button to add/edit date-specific departures. */
+  onDayEdit?: (iso: string) => void;
 }) {
   const today = todayISO();
   const totalDeps = dates.reduce((n, iso) => n + departuresForDate(experiences, iso).length, 0);
-  if (totalDeps === 0 && dates.length > 3) return <Empty text="Sin salidas en este periodo" />;
+  if (!onDayEdit && totalDeps === 0 && dates.length > 3)
+    return <Empty text="Sin salidas en este periodo" />;
 
   return (
     <div className="grid gap-2">
@@ -174,6 +178,16 @@ export function DatedAgenda({
                 <span className="text-sm text-muted-foreground/60">Sin salidas</span>
               ) : (
                 deps.map((d, i) => <DepartureRow key={i} d={d} onSelect={onSelect} />)
+              )}
+              {onDayEdit && (
+                <button
+                  type="button"
+                  onClick={() => onDayEdit(iso)}
+                  className="inline-flex w-fit items-center gap-1 rounded-lg px-1.5 py-1 text-xs font-medium text-teal transition hover:bg-teal/10"
+                >
+                  {deps.length === 0 ? <Plus className="h-3.5 w-3.5" /> : <Pencil className="h-3 w-3" />}
+                  {deps.length === 0 ? "Habilitar salida" : "Editar / agregar salidas"}
+                </button>
               )}
             </div>
           </div>

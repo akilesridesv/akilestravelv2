@@ -15,11 +15,15 @@
 // ---------------------------------------------------------------------------
 
 import { useApp } from "@/state/store";
+import { uid, addDaysISO } from "@/lib/utils";
+import { addHours, parseTimeToken } from "@/ai/nlp";
 import type {
+  DateSlot,
   Experience,
   ProviderPreferences,
   ProviderProfile,
   ProviderSocial,
+  RecurringSchedule,
 } from "@/types/domain";
 
 export interface ToolResult {
@@ -289,6 +293,48 @@ export const TOOLS: AgentTool[] = [
   },
 
   {
+    name: "set_departures",
+    description:
+      "Habilita, agrega, modifica, deshabilita o quita horarios de salida (con su cupo) de una experiencia. " +
+      "Usa 'days' para salidas recurrentes por día de la semana (p. ej. 'abre los sábados a las 10am cupo 8', " +
+      "'cambia la hora de los domingos a 2pm', 'bloquea los lunes') y 'dates' para fechas puntuales YYYY-MM-DD " +
+      "(p. ej. 'habilita el 5 y 8 de septiembre a las 9am', 'quita la salida del 5 de septiembre'). " +
+      "action='open' para habilitar/agregar/modificar; action='close' para quitar/deshabilitar.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["action"],
+      properties: {
+        id: { type: "string", description: "Experience id (si se omite, usa la activa o la única)." },
+        action: {
+          type: "string",
+          enum: ["open", "close"],
+          description: "open = habilitar/agregar/modificar; close = quitar/deshabilitar",
+        },
+        days: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Días recurrentes: lunes, martes, miércoles, jueves, viernes, sábado, domingo (también 'fin de semana' o 'entre semana').",
+        },
+        dates: {
+          type: "array",
+          items: { type: "string" },
+          description: "Fechas puntuales en formato YYYY-MM-DD.",
+        },
+        date_from: {
+          type: "string",
+          description: "Inicio de un RANGO de fechas YYYY-MM-DD (p. ej. 'del 5 al 12 de septiembre').",
+        },
+        date_to: { type: "string", description: "Fin del rango de fechas YYYY-MM-DD." },
+        time: { type: "string", description: "Hora HH:MM (24h). Necesaria al abrir una salida nueva." },
+        capacity: { type: "integer", description: "Cupo por salida." },
+      },
+    },
+    run: (input: any) => applyDepartures(input),
+  },
+
+  {
     name: "set_booking_status",
     description:
       "Approve (confirmed) or reject (rejected) a booking. Identify it by booking_id or by the customer's contact_name.",
@@ -393,6 +439,149 @@ export function applyExperiencePatch(input: any): ToolResult {
   return {
     ok: true,
     message: `Actualicé “${exp.title}”: ${changes.join(", ")}.`,
+    changes,
+    data: { id: exp.id },
+  };
+}
+
+// ---- Departures (recurring schedules + specific-date slots) ---------------
+
+const DAY_TO_NUM: Record<string, number> = {
+  domingo: 0, domingos: 0,
+  lunes: 1,
+  martes: 2,
+  miercoles: 3,
+  jueves: 4,
+  viernes: 5,
+  sabado: 6, sabados: 6,
+};
+const NUM_TO_DAY = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+function normDays(arr: string[]): number[] {
+  const out = new Set<number>();
+  for (const raw of arr) {
+    const d = String(raw).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+    if (/fin\s*de\s*semana|finde/.test(d)) {
+      out.add(6);
+      out.add(0);
+      continue;
+    }
+    if (/entre\s*semana|laboral/.test(d)) {
+      [1, 2, 3, 4, 5].forEach((n) => out.add(n));
+      continue;
+    }
+    const n = DAY_TO_NUM[d] ?? DAY_TO_NUM[d.replace(/s$/, "")];
+    if (n !== undefined) out.add(n);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+function normTime(t?: string): string | null {
+  if (!t) return null;
+  const m = String(t).trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (m) return `${m[1].padStart(2, "0")}:${m[2]}`;
+  return parseTimeToken(String(t));
+}
+
+/** Add / modify / remove recurring departures (by weekday) and specific dates. */
+export function applyDepartures(input: any): ToolResult {
+  const s = useApp.getState();
+  const exp =
+    s.experiences.find((e) => e.id === input.id) ??
+    (s.activeExperienceId ? s.experiences.find((e) => e.id === s.activeExperienceId) : undefined) ??
+    (s.experiences.length === 1 ? s.experiences[0] : undefined);
+  if (!exp)
+    return {
+      ok: false,
+      message:
+        s.experiences.length > 1
+          ? "¿En cuál experiencia? Dime el nombre."
+          : "No encontré esa experiencia.",
+    };
+
+  const action: "open" | "close" = input.action === "close" ? "close" : "open";
+  const days = Array.isArray(input.days) ? normDays(input.days) : [];
+  const dates: string[] = Array.isArray(input.dates)
+    ? input.dates.filter((d: any) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d))
+    : [];
+  // Expand a date range (date_from → date_to) into individual dates.
+  const iso = (d: any) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  if (iso(input.date_from) && iso(input.date_to)) {
+    let cur = input.date_from <= input.date_to ? input.date_from : input.date_to;
+    const hi = input.date_from <= input.date_to ? input.date_to : input.date_from;
+    for (let guard = 0; cur <= hi && guard < 120; guard++) {
+      if (!dates.includes(cur)) dates.push(cur);
+      cur = addDaysISO(cur, 1);
+    }
+  }
+  const time = normTime(input.time);
+  const capacity =
+    Number.isFinite(input.capacity) && input.capacity > 0
+      ? Math.round(input.capacity)
+      : exp.max_capacity || 10;
+
+  if (!days.length && !dates.length)
+    return {
+      ok: false,
+      message: "Dime los días (ej. “sábados”) o las fechas (ej. “5 y 8 de septiembre”).",
+    };
+
+  let schedules: RecurringSchedule[] = exp.schedules.map((x) => ({ ...x }));
+  let slots: DateSlot[] = (exp.date_slots ?? []).map((x) => ({ ...x }));
+  const changes: string[] = [];
+  const start = time ?? "09:00";
+  const end = addHours(start, exp.duration_hours || 2);
+
+  if (days.length) {
+    if (action === "close") {
+      schedules = schedules.filter((x) => !days.includes(x.day_of_week));
+      changes.push(`quité las salidas de ${days.map((n) => NUM_TO_DAY[n]).join(", ")}`);
+    } else {
+      for (const dow of days) {
+        schedules = schedules.filter((x) => x.day_of_week !== dow);
+        schedules.push({
+          id: uid("sch"),
+          day_of_week: dow,
+          start_time: start,
+          end_time: end,
+          capacity,
+          is_active: true,
+        });
+      }
+      changes.push(`abrí ${days.map((n) => NUM_TO_DAY[n]).join(", ")} a las ${start} (cupo ${capacity})`);
+    }
+  }
+
+  if (dates.length) {
+    if (action === "close") {
+      slots = slots.filter((x) => !dates.includes(x.slot_date));
+      changes.push(`quité ${dates.length} fecha${dates.length === 1 ? "" : "s"}`);
+    } else {
+      for (const date of dates) {
+        slots = slots.filter((x) => x.slot_date !== date);
+        slots.push({
+          id: uid("ds"),
+          slot_date: date,
+          start_time: start,
+          end_time: end,
+          capacity,
+          status: "open",
+        });
+      }
+      changes.push(
+        `habilité ${dates.length} fecha${dates.length === 1 ? "" : "s"} a las ${start} (cupo ${capacity})`
+      );
+    }
+  }
+
+  const patch: Partial<Experience> = {};
+  if (days.length) patch.schedules = schedules;
+  if (dates.length) patch.date_slots = slots;
+  s.updateExperience(exp.id, patch);
+
+  return {
+    ok: true,
+    message: `En “${exp.title}”: ${changes.join("; ")}.`,
     changes,
     data: { id: exp.id },
   };

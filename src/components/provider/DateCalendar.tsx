@@ -2,9 +2,19 @@ import { useRef, useState } from "react";
 import type { DateSlot, Experience } from "@/types/domain";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { TierManager } from "@/components/provider/TierManager";
 import { addHours } from "@/ai/nlp";
 import { notify } from "@/state/toast";
-import { cn, isoDate, todayISO, todayPartsSV, addDaysISO, monthName, uid } from "@/lib/utils";
+import {
+  cn,
+  isoDate,
+  todayISO,
+  todayPartsSV,
+  addDaysISO,
+  monthName,
+  uid,
+  parseISODate,
+} from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Check, X, CalendarPlus } from "lucide-react";
 
 const DOW = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
@@ -16,15 +26,22 @@ const DOW = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
  */
 type CalendarExperience = Pick<
   Experience,
-  "date_slots" | "max_capacity" | "duration_hours" | "tiers"
+  "date_slots" | "schedules" | "max_capacity" | "duration_hours" | "tiers"
 >;
 
 export function DateCalendar({
   experience,
   onChange,
+  onDayOpen,
+  onTiers,
 }: {
   experience: CalendarExperience;
   onChange: (slots: DateSlot[]) => void;
+  /** When set, tapping a day opens that day's departures editor (modal) instead
+   *  of the inline range editor — so the enabled times for the day are visible. */
+  onDayOpen?: (iso: string) => void;
+  /** When set, the range editor can create/edit tiers (not just select them). */
+  onTiers?: (tiers: Experience["tiers"]) => void;
 }) {
   const slots = experience.date_slots ?? [];
   const today = todayISO();
@@ -35,6 +52,7 @@ export function DateCalendar({
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [dragging, setDragging] = useState(false);
   const anchor = useRef<string | null>(null);
+  const moved = useRef(false); // did the drag extend past the anchor day?
   const [time, setTime] = useState("09:00");
   const [capacity, setCapacity] = useState(experience.max_capacity || 10);
   const [tierSel, setTierSel] = useState<Set<string>>(
@@ -73,12 +91,24 @@ export function DateCalendar({
   function begin(date: string) {
     if (date < today) return;
     anchor.current = date;
+    moved.current = false;
     setDragging(true);
     setSelection(new Set([date]));
   }
   function extend(date: string) {
     if (!dragging || !anchor.current || date < today) return;
+    if (date !== anchor.current) moved.current = true;
     setSelection(new Set(rangeBetween(anchor.current, date)));
+  }
+  // A tap (no drag) on a single day opens its detail modal when onDayOpen is set;
+  // dragging across days keeps the range selected for the bulk editor below.
+  function endPointer() {
+    setDragging(false);
+    if (onDayOpen && !moved.current && anchor.current) {
+      const d = anchor.current;
+      setSelection(new Set());
+      onDayOpen(d);
+    }
   }
   function onMove(e: React.PointerEvent) {
     if (!dragging) return;
@@ -167,13 +197,22 @@ export function DateCalendar({
         className="grid grid-cols-7 gap-1"
         style={{ touchAction: "none" }}
         onPointerMove={onMove}
-        onPointerUp={() => setDragging(false)}
+        onPointerUp={endPointer}
         onPointerLeave={() => setDragging(false)}
       >
         {cells.map((date, i) => {
           if (!date) return <span key={`e${i}`} />;
           const slot = slotByDate.get(date);
-          const isOpen = slot && slot.status === "open";
+          // Sync with the week/agenda view: a day is "con salida" if it has an
+          // open date_slot OR a recurring schedule on that weekday (unless a slot
+          // explicitly blocks it).
+          const dow = parseISODate(date).getDay();
+          const recTimes = experience.schedules
+            .filter((s) => s.day_of_week === dow)
+            .map((s) => s.start_time)
+            .sort();
+          const isOpen = slot ? slot.status === "open" : recTimes.length > 0;
+          const showTime = slot?.status === "open" ? slot.start_time : recTimes[0];
           const isPast = date < today;
           const isSel = selection.has(date);
           const dayNum = parseInt(date.slice(8), 10);
@@ -194,8 +233,8 @@ export function DateCalendar({
               )}
             >
               <span className={cn(isOpen && "font-medium")}>{dayNum}</span>
-              {isOpen && !isSel && (
-                <span className="text-[9px] leading-none text-muted-foreground">{slot!.start_time}</span>
+              {isOpen && !isSel && showTime && (
+                <span className="text-[9px] leading-none text-muted-foreground">{showTime}</span>
               )}
             </button>
           );
@@ -270,9 +309,29 @@ export function DateCalendar({
             </div>
           )}
 
+          {onTiers && (
+            <div className="mt-3">
+              <span className="mb-1 block text-xs text-muted-foreground">
+                {experience.tiers.length ? "Crear o editar tiers" : "Tiers (opcional)"}
+              </span>
+              <TierManager
+                value={experience.tiers}
+                onChange={(tiers) => {
+                  onTiers(tiers);
+                  // Auto-select newly created tiers so they apply to these dates.
+                  setTierSel((prev) => {
+                    const next = new Set(prev);
+                    tiers.forEach((t) => next.add(t.id));
+                    return next;
+                  });
+                }}
+              />
+            </div>
+          )}
+
           <div className="mt-3 flex flex-wrap gap-2">
             <Button size="sm" onClick={() => apply("open")}>
-              <Check className="h-4 w-4" /> Habilitar
+              <Check className="h-4 w-4" /> Habilitar salida
             </Button>
             <Button size="sm" variant="outline" onClick={() => apply("remove")}>
               <X className="h-4 w-4" /> Quitar
@@ -284,8 +343,10 @@ export function DateCalendar({
         </div>
       ) : (
         <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-          <CalendarPlus className="h-3.5 w-3.5" /> Arrastra sobre los días para seleccionar y habilitar
-          o quitar fechas.
+          <CalendarPlus className="h-3.5 w-3.5" />{" "}
+          {onDayOpen
+            ? "Toca un día para ver o editar sus salidas · arrastra sobre varios para habilitarlos en bloque."
+            : "Toca un día para habilitar salida (o arrastra sobre varios) y luego ajusta hora y cupo."}
         </p>
       )}
     </div>
