@@ -249,8 +249,19 @@ export default function TouristHome() {
     <div className="min-h-dvh bg-background">
       <TouristHeader />
 
-      {/* Hero + concierge */}
-      <section className="mx-auto max-w-3xl px-5 pt-14 pb-8 text-center sm:px-8 sm:pt-20">
+      {/* Hero + concierge, over a blurred El Salvador backdrop */}
+      <div className="relative isolate overflow-hidden">
+        {/* Distorted destination photo (San Salvador Volcano crater), faded into
+            the page so it never competes with the text/controls above it. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <img
+            src="/hero-elsalvador.jpg"
+            alt=""
+            className="h-full w-full scale-110 object-cover blur-2xl"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/45 to-background" />
+        </div>
+      <section className="relative z-10 mx-auto max-w-3xl px-5 pt-14 pb-8 text-center sm:px-8 sm:pt-20">
         <p className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
           <Sparkles className="h-3.5 w-3.5 text-primary" /> Descubre con tu concierge de IA
         </p>
@@ -443,6 +454,7 @@ export default function TouristHome() {
           ))}
         </div>
       </section>
+      </div>
 
       {/* Browse / concierge results */}
       <section className="mx-auto max-w-6xl px-5 pt-6 sm:px-8">
