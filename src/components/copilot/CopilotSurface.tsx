@@ -92,6 +92,7 @@ export function CopilotSurface({
   context?: string;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const historicalIds = useRef<Set<string>>(new Set());
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [conversations, setConversations] = useState<repo.Conversation[]>([]);
@@ -176,8 +177,11 @@ export function CopilotSurface({
     repo
       .loadMessages(convId)
       .then((rows) => {
-        if (alive)
-          setMessages(rows.map((r) => ({ id: r.id, role: r.role, blocks: r.blocks as Block[] })));
+        if (!alive) return;
+        // Messages restored from history must NOT auto-open the edit modal
+        // (that popped the "Editar experiencia" wizard on every login).
+        historicalIds.current = new Set(rows.map((r) => r.id));
+        setMessages(rows.map((r) => ({ id: r.id, role: r.role, blocks: r.blocks as Block[] })));
       })
       .catch(console.error);
     return () => {
@@ -771,7 +775,12 @@ export function CopilotSurface({
         ) : (
           <div className="mx-auto flex w-full min-w-0 max-w-2xl flex-col gap-4">
             {messages.map((m) => (
-              <MessageView key={m.id} message={m} onAction={handleSend} />
+              <MessageView
+                key={m.id}
+                message={m}
+                autoOpenDraft={!historicalIds.current.has(m.id)}
+                onAction={handleSend}
+              />
             ))}
             {busy && <ThinkingRow />}
           </div>
@@ -855,9 +864,11 @@ function Welcome({ onPick }: { onPick: (s: string) => void }) {
 
 function MessageView({
   message,
+  autoOpenDraft = true,
   onAction,
 }: {
   message: Message;
+  autoOpenDraft?: boolean;
   onAction: (text: string) => void;
 }) {
   const isUser = message.role === "user";
@@ -866,7 +877,7 @@ function MessageView({
       <div className={isUser ? "min-w-0 max-w-[85%]" : "w-full min-w-0"}>
         {message.blocks.map((b, i) => (
           <div key={i} className={i > 0 ? "mt-2" : ""}>
-            <BlockView block={b} isUser={isUser} onAction={onAction} />
+            <BlockView block={b} isUser={isUser} autoOpenDraft={autoOpenDraft} onAction={onAction} />
           </div>
         ))}
       </div>
@@ -877,10 +888,12 @@ function MessageView({
 function BlockView({
   block,
   isUser,
+  autoOpenDraft = true,
   onAction,
 }: {
   block: Block;
   isUser: boolean;
+  autoOpenDraft?: boolean;
   onAction: (text: string) => void;
 }) {
   switch (block.type) {
@@ -911,6 +924,7 @@ function BlockView({
           initial={block.draft}
           mode={block.mode}
           experienceId={block.experienceId}
+          autoOpen={autoOpenDraft}
           onDone={() => {}}
         />
       );

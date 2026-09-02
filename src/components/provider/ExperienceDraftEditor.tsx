@@ -114,12 +114,16 @@ export function ExperienceDraftEditor({
   initial,
   mode = "create",
   experienceId,
+  autoOpen = true,
   onDone,
   onCancel,
 }: {
   initial: ExperienceDraft;
   mode?: "create" | "edit";
   experienceId?: string;
+  /** Edit mode only: open the modal immediately. False for restored chat
+   *  history so it doesn't pop the editor on every login. */
+  autoOpen?: boolean;
   onDone?: (title: string) => void;
   onCancel?: () => void;
 }) {
@@ -142,11 +146,17 @@ export function ExperienceDraftEditor({
   // In edit mode the wizard lives inside a Modal. Own the open state so the X /
   // Escape / backdrop always close it, even when no onCancel prop was passed
   // (e.g. when opened from the chat surface).
-  const [modalOpen, setModalOpen] = useState(true);
+  const [modalOpen, setModalOpen] = useState(autoOpen);
   const closeModal = () => {
     setModalOpen(false);
     onCancel?.();
   };
+
+  // When a restored chat edit-block is closed, mark the active experience so
+  // chat edits still target it while the wizard is collapsed.
+  useEffect(() => {
+    if (mode === "edit" && experienceId && modalOpen) setActiveExperience(experienceId);
+  }, [modalOpen, mode, experienceId, setActiveExperience]);
 
   // Consume images uploaded from the chat composer's "add images" button and
   // append them to this draft (first mounted editor wins — consume is atomic).
@@ -712,9 +722,22 @@ export function ExperienceDraftEditor({
   );
 
   return isEdit ? (
-    <Modal open={modalOpen} onClose={closeModal} title="Editar experiencia">
-      {wizard}
-    </Modal>
+    !modalOpen ? (
+      <button
+        onClick={() => setModalOpen(true)}
+        className="flex w-full items-center gap-2 rounded-2xl border border-border bg-card px-4 py-3 text-left text-sm transition hover:bg-accent"
+      >
+        <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+        <span className="min-w-0 flex-1 truncate">
+          Editor de <b>{d.title || "la experiencia"}</b>
+        </span>
+        <span className="shrink-0 text-xs font-medium text-ink">Abrir editor</span>
+      </button>
+    ) : (
+      <Modal open={modalOpen} onClose={closeModal} title="Editar experiencia">
+        {wizard}
+      </Modal>
+    )
   ) : (
     <Card className="animate-fade-in overflow-hidden">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
