@@ -257,11 +257,11 @@ export default function TouristHome() {
           <img
             src="/hero-elsalvador.jpg"
             alt=""
-            className="h-full w-full scale-105 object-cover blur-md"
+            className="h-full w-full object-cover"
           />
-          {/* Lighter veil so the crater reads; a soft scrim keeps the headline
-              legible and the bottom fades cleanly into the page. */}
-          <div className="absolute inset-0 bg-gradient-to-b from-background/25 via-background/35 to-background" />
+          {/* Sharp photo — a soft scrim keeps the headline/controls legible and
+              the bottom fades cleanly into the page. */}
+          <div className="absolute inset-0 bg-gradient-to-b from-background/35 via-background/40 to-background" />
         </div>
       <section className="relative z-10 mx-auto max-w-3xl px-5 pt-14 pb-8 text-center sm:px-8 sm:pt-20">
         <p className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
