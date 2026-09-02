@@ -14,6 +14,8 @@ import { Modal } from "@/components/ui/modal";
 import { ExperienceCard } from "@/components/tourist/ExperienceCard";
 import { Ticket, shareTicket, shareTicketPdf, type TicketData } from "@/components/tourist/Ticket";
 import { BookingChat } from "@/components/tourist/BookingChat";
+import { ConciergeChat } from "@/components/tourist/ConciergeChat";
+import { isLLMEnabled } from "@/ai/llm";
 import { EXPERIENCE_CATEGORIES } from "@/lib/categories";
 import { notify } from "@/state/toast";
 import { todayISO, parseISODate, dayName, monthName, cn } from "@/lib/utils";
@@ -563,40 +565,50 @@ function Concierge({ onCreated }: { onCreated: () => void }) {
   const [seed, setSeed] = useState("");
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-3xl tracking-tight">Concierge</h1>
-        <p className="mt-1 text-muted-foreground">
-          Cuéntanos qué necesitas. Si no está en la plataforma, lo gestionamos como una solicitud a Akiles Travel.
-        </p>
-      </div>
-
-      <div className="rounded-2xl border border-border bg-card p-4">
-        <p className="mb-3 flex items-center gap-2 text-sm font-medium">
-          <Sparkles className="h-4 w-4 text-primary" /> ¿Qué te gustaría hacer o necesitas?
-        </p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {[
-            "Quiero alquilar un vehículo para 3 días",
-            "Necesito un guía que hable inglés en Ruta de las Flores",
-            "Busco un tour privado de surf en El Tunco",
-            "Necesito conductor del aeropuerto a La Libertad",
-          ].map((s) => (
-            <button
-              key={s}
-              onClick={() => {
-                setSeed(s);
-                setReqOpen(true);
-              }}
-              className="rounded-xl border border-border px-3 py-2 text-left text-sm transition hover:bg-accent"
-            >
-              {s}
-            </button>
-          ))}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl tracking-tight">Concierge</h1>
+          <p className="mt-1 text-muted-foreground">
+            Pídeme ideas, reserva o gestiona tus viajes. Si algo no está en la plataforma, lo gestionamos
+            como una solicitud a Akiles Travel.
+          </p>
         </div>
-        <Button className="mt-3" onClick={() => { setSeed(""); setReqOpen(true); }}>
-          <Plus className="h-4 w-4" /> Nueva solicitud a Akiles
+        <Button variant="outline" className="shrink-0" onClick={() => { setSeed(""); setReqOpen(true); }}>
+          <Plus className="h-4 w-4" /> Solicitud
         </Button>
       </div>
+
+      {isLLMEnabled ? (
+        <ConciergeChat onChanged={onCreated} />
+      ) : (
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <p className="mb-3 flex items-center gap-2 text-sm font-medium">
+            <Sparkles className="h-4 w-4 text-primary" /> ¿Qué te gustaría hacer o necesitas?
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[
+              "Quiero alquilar un vehículo para 3 días",
+              "Necesito un guía que hable inglés en Ruta de las Flores",
+              "Busco un tour privado de surf en El Tunco",
+              "Necesito conductor del aeropuerto a La Libertad",
+            ].map((s) => (
+              <button
+                key={s}
+                onClick={() => {
+                  setSeed(s);
+                  setReqOpen(true);
+                }}
+                className="rounded-xl border border-border px-3 py-2 text-left text-sm transition hover:bg-accent"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+          <Button className="mt-3" onClick={() => { setSeed(""); setReqOpen(true); }}>
+            <Plus className="h-4 w-4" /> Nueva solicitud a Akiles
+          </Button>
+        </div>
+      )}
 
       {reqOpen && (
         <RequestModal
