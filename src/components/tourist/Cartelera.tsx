@@ -104,7 +104,7 @@ function ShelfRail({
 }) {
   return (
     <section>
-      <h2 className="mb-3 font-display text-2xl font-bold tracking-tight sm:text-3xl">{title}</h2>
+      <h2 className="mb-3 font-display text-lg font-bold tracking-tight sm:text-2xl">{title}</h2>
       <div className="no-scrollbar -mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-1 sm:mx-0 sm:px-0">
         {items.map((e) => (
           <PosterCard key={e.id} e={e} params={params} />
