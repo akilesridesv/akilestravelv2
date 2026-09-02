@@ -1,8 +1,11 @@
 import * as React from "react";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/state/store";
 import { authSignOut } from "@/lib/auth";
+import * as repo from "@/data/repo";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import type { AppNotification } from "@/types/domain";
 import { useIsDesktop } from "@/hooks/useMediaQuery";
 import { CopilotSurface } from "@/components/copilot/CopilotSurface";
 import {
@@ -25,6 +28,7 @@ import {
   Clock3,
   LogOut,
   LifeBuoy,
+  Bell,
   User,
 } from "lucide-react";
 
@@ -45,6 +49,25 @@ export default function ProviderDashboard() {
   const isAdmin = useApp((s) => s.isAdmin);
   const authReady = useApp((s) => s.authReady);
   const [showSupport, setShowSupport] = useState(false);
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [notifs, setNotifs] = useState<AppNotification[]>([]);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let alive = true;
+    repo.loadNotifications().then((n) => alive && setNotifs(n)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const unread = notifs.filter((n) => !n.read_at).length;
+  async function openNotifs() {
+    setShowNotifs(true);
+    const ids = notifs.filter((n) => !n.read_at).map((n) => n.id);
+    if (ids.length) {
+      await Promise.all(ids.map((id) => repo.markNotificationRead(id).catch(() => {})));
+      setNotifs((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })));
+    }
+  }
   const isDesktop = useIsDesktop();
   const [activePanel, setActivePanel] = useState<Panel>("experiences");
   const [page, setPage] = useState<0 | 1>(0); // mobile pager: 0 = chat, 1 = panel
@@ -128,8 +151,18 @@ export default function ProviderDashboard() {
           </div>
         </button>
         <button
+          onClick={openNotifs}
+          aria-label="Notificaciones"
+          className="relative ml-auto inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-accent"
+        >
+          <Bell className="h-4 w-4" />
+          {unread > 0 && (
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
+          )}
+        </button>
+        <button
           onClick={() => setShowSupport(true)}
-          className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3 text-sm text-muted-foreground transition hover:bg-accent"
+          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3 text-sm text-muted-foreground transition hover:bg-accent"
         >
           <LifeBuoy className="h-4 w-4" /> <span className="hidden sm:inline">Soporte</span>
         </button>
@@ -210,6 +243,24 @@ export default function ProviderDashboard() {
             ))}
           </nav>
         </>
+      )}
+
+      {showNotifs && (
+        <Modal open onClose={() => setShowNotifs(false)} title="Notificaciones">
+          {notifs.length ? (
+            <div className="grid gap-2">
+              {notifs.map((n) => (
+                <div key={n.id} className="rounded-xl border border-border p-3">
+                  <p className="text-sm font-medium">{n.title}</p>
+                  {n.body && <p className="text-xs text-muted-foreground">{n.body}</p>}
+                  <p className="mt-1 text-[11px] text-muted-foreground">{n.created_at.slice(0, 10)}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="py-8 text-center text-sm text-muted-foreground">Sin notificaciones.</p>
+          )}
+        </Modal>
       )}
 
       {showSupport && (

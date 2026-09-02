@@ -1027,6 +1027,7 @@ export async function adminSetProviderBank(
 
 export async function adminCreatePayout(input: {
   provider_profile_id: string;
+  provider_user_id?: string; // to notify the provider in their dashboard
   amount: number;
   booking_ids: string[];
   bank_name?: string;
@@ -1036,11 +1037,31 @@ export async function adminCreatePayout(input: {
   transfer_ref?: string;
   note?: string;
 }): Promise<Payout> {
-  const { data, error } = await sb().from("payouts").insert({ ...input, status: "paid" }).select().single();
+  const { provider_user_id, ...row } = input;
+  const { data, error } = await sb().from("payouts").insert({ ...row, status: "paid" }).select().single();
   if (error) throw error;
   if (input.booking_ids.length)
     await sb().from("bookings").update({ payout_id: data.id }).in("id", input.booking_ids);
+  // Notify the provider that a payout was made (shows in their dashboard).
+  if (provider_user_id) {
+    await sb()
+      .from("notifications")
+      .insert({
+        user_id: provider_user_id,
+        kind: "payout",
+        title: `Pago recibido de Akiles Travel`,
+        body: `Se registró un pago de ${input.amount.toFixed(2)} USD por ${input.booking_ids.length} reserva(s).`,
+      })
+      .then(undefined, () => {});
+  }
   return mapPayout(data);
+}
+
+/** Payouts made to the signed-in provider (RLS returns only theirs). */
+export async function loadProviderPayouts(): Promise<Payout[]> {
+  const { data, error } = await sb().from("payouts").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapPayout);
 }
 
 /** Revert a payout: mark it reverted and reopen its bookings as unpaid. */

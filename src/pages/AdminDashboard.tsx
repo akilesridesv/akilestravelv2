@@ -1002,6 +1002,7 @@ function PayoutModal({
   onDone: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set(unpaid.map((b) => b.id)));
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const ba = provider.bank_account;
   const [bank, setBank] = useState(ba?.bank ?? "");
   const [account, setAccount] = useState(ba?.account_number ?? "");
@@ -1044,6 +1045,7 @@ function PayoutModal({
       await repo.adminSetProviderBank(provider.id, bankData);
       await repo.adminCreatePayout({
         provider_profile_id: provider.id,
+        provider_user_id: provider.user_id,
         amount: parseFloat(amount) || selectedSum,
         booking_ids: ids,
         bank_name: bankData.bank,
@@ -1076,21 +1078,44 @@ function PayoutModal({
               {selected.size === unpaid.length ? "Quitar todas" : "Seleccionar todas"}
             </button>
           </div>
-          <div className="grid max-h-44 gap-1.5 overflow-y-auto">
+          <div className="grid max-h-52 gap-1.5 overflow-y-auto">
             {unpaid.map((b) => (
-              <label
-                key={b.id}
-                className="flex cursor-pointer items-center gap-2 rounded-xl border border-border p-2.5 text-sm"
-              >
-                <input type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} className="h-4 w-4" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{b.experience_title}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {b.scheduled_date} · {b.confirmation_code}
+              <div key={b.id} className="rounded-xl border border-border p-2.5 text-sm">
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} className="h-4 w-4" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{b.experience_title}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {b.scheduled_date} · {b.confirmation_code}
+                    </span>
                   </span>
-                </span>
-                <span className="shrink-0 font-medium">{formatUSD(payoutOf(b))}</span>
-              </label>
+                  <span className="shrink-0 font-medium">{formatUSD(payoutOf(b))}</span>
+                  <button
+                    onClick={() =>
+                      setExpanded((prev) => {
+                        const n = new Set(prev);
+                        n.has(b.id) ? n.delete(b.id) : n.add(b.id);
+                        return n;
+                      })
+                    }
+                    className="shrink-0 text-xs text-teal hover:underline"
+                  >
+                    {expanded.has(b.id) ? "Ocultar" : "Detalle"}
+                  </button>
+                </div>
+                {expanded.has(b.id) && (
+                  <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
+                    <span>Cliente: <b className="text-foreground">{b.contact_name}</b></span>
+                    <span>Correo: <b className="text-foreground">{b.contact_email}</b></span>
+                    <span>Fecha: <b className="text-foreground">{b.scheduled_date} {b.scheduled_time}</b></span>
+                    <span>Personas: <b className="text-foreground">{b.number_of_people}</b></span>
+                    <span>Estado: <b className="text-foreground">{b.booking_status}</b></span>
+                    <span>Pagó: <b className="text-foreground">{formatUSD(b.total_paid)}</b></span>
+                    <span>Comisión: <b className="text-foreground">{formatUSD(b.platform_commission ?? 0)}</b></span>
+                    <span>Neto proveedor: <b className="text-foreground">{formatUSD(payoutOf(b))}</b></span>
+                  </div>
+                )}
+              </div>
             ))}
             {unpaid.length === 0 && <p className="text-sm text-muted-foreground">Sin reservas pendientes.</p>}
           </div>

@@ -1,6 +1,9 @@
 import * as React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "@/state/store";
+import * as repo from "@/data/repo";
+import type { Payout } from "@/data/repo";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import { Card, Badge } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -599,10 +602,24 @@ function BookingRow({ b, onOpen }: { b: Booking; onOpen: () => void }) {
 
 export function RevenuePanel() {
   const bookings = useApp((s) => s.bookings);
+  const [payouts, setPayouts] = useState<Payout[]>([]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let alive = true;
+    repo.loadProviderPayouts().then((p) => alive && setPayouts(p)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const earning = bookings.filter((b) => ["confirmed", "completed"].includes(b.booking_status));
   const gross = earning.reduce((sum, b) => sum + b.subtotal_paid, 0);
-  const commission = gross * 0.1; // platform commission (default 10%)
-  const net = gross - commission;
+  // Net earned = the sum the platform owes/pays you (price minus commission).
+  const net = earning.reduce((sum, b) => sum + (b.provider_payout ?? b.subtotal_paid), 0);
+  const commission = gross - net;
+  const paid = payouts.filter((p) => p.status === "paid").reduce((s, p) => s + p.amount, 0);
+  const toReceive = Math.max(0, net - paid);
   const pending = bookings.filter((b) => b.booking_status === "pending_approval").length;
 
   const stat = (label: string, value: string, hint?: string) => (
@@ -617,12 +634,55 @@ export function RevenuePanel() {
     <div className="grid grid-cols-1 gap-3">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {stat("Ventas brutas", formatUSD(gross), `${earning.length} reservas`)}
-        {stat("Tu neto", formatUSD(net), "después de comisión 10%")}
+        {stat("Ganado con la plataforma", formatUSD(net), `comisión ${formatUSD(commission)}`)}
         {stat("Por aprobar", String(pending), pending ? "requieren tu acción" : "todo al día")}
       </div>
-      <Card className="flex items-center gap-3 p-4 text-sm text-muted-foreground">
-        <TrendingUp className="h-4 w-4 text-primary" />
-        Pregúntale al copiloto “¿cómo va mi mes?” o “¿qué experiencia vende más?” para más detalle.
+
+      {/* Facturación: lo que Akiles te ha pagado */}
+      <Card className="p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-primary" />
+          <p className="font-medium">Facturación con Akiles Travel</p>
+        </div>
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="rounded-xl bg-secondary/50 p-3">
+            <p className="font-display text-xl">{formatUSD(net)}</p>
+            <p className="text-[11px] text-muted-foreground">Total ganado</p>
+          </div>
+          <div className="rounded-xl bg-secondary/50 p-3">
+            <p className="font-display text-xl text-emerald-700">{formatUSD(paid)}</p>
+            <p className="text-[11px] text-muted-foreground">Pagado por la plataforma</p>
+          </div>
+          <div className="rounded-xl bg-secondary/50 p-3">
+            <p className="font-display text-xl text-ink">{formatUSD(toReceive)}</p>
+            <p className="text-[11px] text-muted-foreground">Por cobrar</p>
+          </div>
+        </div>
+
+        <p className="mb-2 mt-4 text-sm font-medium">Pagos recibidos</p>
+        {payouts.filter((p) => p.status === "paid").length ? (
+          <div className="grid gap-2">
+            {payouts
+              .filter((p) => p.status === "paid")
+              .map((p) => (
+                <div key={p.id} className="flex items-center justify-between rounded-xl border border-border p-3 text-sm">
+                  <div className="min-w-0">
+                    <p className="font-medium">{formatUSD(p.amount)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {p.created_at.slice(0, 10)} · {p.booking_ids.length} reserva(s)
+                      {p.bank_name ? ` · ${p.bank_name}` : ""}
+                      {p.transfer_ref ? ` · ref ${p.transfer_ref}` : ""}
+                    </p>
+                  </div>
+                  <Badge tone="success">Pagado</Badge>
+                </div>
+              ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Aún no has recibido pagos. Cuando Akiles te transfiera, aparecerá aquí.
+          </p>
+        )}
       </Card>
     </div>
   );
