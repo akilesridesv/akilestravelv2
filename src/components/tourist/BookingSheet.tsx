@@ -15,6 +15,7 @@ import { notify } from "@/state/toast";
 import { formatUSD, parseISODate, dayName, monthName, uid, cn } from "@/lib/utils";
 import { resolveFees, computeFees, FALLBACK_FEE_DEFAULTS, type FeeDefaults } from "@/lib/fees";
 import { shareExperience } from "@/lib/share";
+import { addHours } from "@/ai/nlp";
 import {
   Check,
   ChevronLeft,
@@ -690,6 +691,7 @@ export function BookingSheet({
                   coverImage: experience.featured_image,
                   date,
                   time,
+                  endTime: dep?.end_time || addHours(time, experience.duration_hours),
                   peopleLabel: `${adults} adulto${adults === 1 ? "" : "s"}${
                     children > 0 ? ` · ${children} niño${children === 1 ? "" : "s"}` : ""
                   }`,

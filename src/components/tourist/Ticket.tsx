@@ -10,7 +10,8 @@ export interface TicketData {
   title: string;
   coverImage?: string; // experience image ref (optional)
   date: string; // ISO yyyy-mm-dd
-  time: string;
+  time: string; // start "16:00"
+  endTime?: string; // end "18:00" (shown as a range when present)
   peopleLabel: string; // "2 adultos · 1 niño" or "2 personas"
   holderName?: string;
   meetingPoint?: string; // location_address (text, coords or maps link)
@@ -140,7 +141,7 @@ async function buildTicketPdf(d: TicketData): Promise<Blob> {
   const colL = M;
   const colR = W / 2 + 2;
   field("Fecha", fullDate(d.date), colL, y);
-  field("Hora", d.time, colR, y);
+  field("Hora", d.endTime ? `${d.time} - ${d.endTime}` : d.time, colR, y);
   y += 14;
   field("Titular", d.holderName || "—", colL, y);
   field("Pasajeros", d.peopleLabel, colR, y);
@@ -189,6 +190,28 @@ async function buildTicketPdf(d: TicketData): Promise<Blob> {
   return doc.output("blob");
 }
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/** Download the ticket PDF directly (no share sheet). */
+export async function downloadTicketPdf(d: TicketData) {
+  try {
+    const blob = await buildTicketPdf(d);
+    downloadBlob(blob, `ticket-${d.code}.pdf`);
+    notify("Ticket descargado como PDF.");
+  } catch {
+    notify("No pude generar el PDF. Intenta de nuevo.", "warning");
+  }
+}
+
 /** Share the ticket as a PDF file (native share sheet), or download it. */
 export async function shareTicketPdf(d: TicketData) {
   let blob: Blob;
@@ -208,14 +231,7 @@ export async function shareTicketPdf(d: TicketData) {
   } catch {
     /* user cancelled or share unavailable — fall back to download */
   }
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `ticket-${d.code}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  downloadBlob(blob, `ticket-${d.code}.pdf`);
   notify("Ticket guardado como PDF.");
 }
 
@@ -276,7 +292,7 @@ export function Ticket({ data, className = "" }: { data: TicketData; className?:
       {/* Details */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 p-5">
         <Field label="Fecha" value={fullDate(data.date)} />
-        <Field label="Hora" value={data.time} />
+        <Field label="Hora" value={data.endTime ? `${data.time} – ${data.endTime}` : data.time} />
         {data.holderName && <Field label="Titular" value={data.holderName} />}
         <Field label="Pasajeros" value={data.peopleLabel} />
         {data.meetingPoint && (
@@ -326,10 +342,10 @@ export function Ticket({ data, className = "" }: { data: TicketData; className?:
           </button>
           <button
             type="button"
-            onClick={() => shareTicketPdf(data)}
+            onClick={() => downloadTicketPdf(data)}
             className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm transition hover:bg-accent"
           >
-            <FileDown className="h-4 w-4" /> PDF
+            <FileDown className="h-4 w-4" /> Descargar PDF
           </button>
           {data.whatsapp && (
             <a

@@ -8,6 +8,8 @@ import type { Booking, ConciergeRequest, ProviderProfile, TouristProfile } from 
 import { resolveFees, type FeeDefaults, type FeeType } from "@/lib/fees";
 import { EL_SALVADOR_BANKS, type BankAccountType } from "@/lib/banks";
 import { SupportChat } from "@/components/support/SupportChat";
+import { AdminChat } from "@/components/admin/AdminChat";
+import { isLLMEnabled } from "@/ai/llm";
 import { Ticket as TicketCard, type TicketData } from "@/components/tourist/Ticket";
 import type { Passenger } from "@/data/repo";
 import { Logo } from "@/components/ui/Logo";
@@ -16,6 +18,7 @@ import { Input, Label } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { notify } from "@/state/toast";
 import { formatUSD, cn } from "@/lib/utils";
+import { addHours } from "@/ai/nlp";
 import {
   LayoutDashboard,
   Users,
@@ -31,12 +34,22 @@ import {
   Info,
   TrendingUp,
   MessageCircle,
+  Sparkles,
 } from "lucide-react";
 
-type Section = "resumen" | "turistas" | "proveedores" | "reservas" | "solicitudes" | "facturacion" | "ajustes";
+type Section =
+  | "resumen"
+  | "asistente"
+  | "turistas"
+  | "proveedores"
+  | "reservas"
+  | "solicitudes"
+  | "facturacion"
+  | "ajustes";
 
 const NAV: { key: Section; label: string; icon: React.ElementType }[] = [
   { key: "resumen", label: "Resumen", icon: LayoutDashboard },
+  { key: "asistente", label: "Asistente IA", icon: Sparkles },
   { key: "turistas", label: "Turistas", icon: Users },
   { key: "proveedores", label: "Proveedores", icon: Store },
   { key: "reservas", label: "Reservas", icon: CalendarCheck },
@@ -169,6 +182,21 @@ export default function AdminDashboard() {
               bookings={bookings}
               settings={settings}
             />
+          )}
+          {section === "asistente" && (
+            <div className="space-y-4">
+              <div>
+                <h1 className="font-display text-3xl tracking-tight">Asistente IA</h1>
+                <p className="mt-1 text-muted-foreground">
+                  El mando central: opera la plataforma por lenguaje natural.
+                </p>
+              </div>
+              {isLLMEnabled ? (
+                <AdminChat onChanged={reload} />
+              ) : (
+                <Empty text="El asistente requiere el modelo de IA habilitado (Gemini)." />
+              )}
+            </div>
           )}
           {section === "turistas" && <Turistas tourists={tourists} bookings={bookings} />}
           {section === "proveedores" && (
@@ -611,6 +639,7 @@ function BookingTicketModal({ booking: b, onClose }: { booking: Booking; onClose
     title: b.experience_title,
     date: b.scheduled_date,
     time: b.scheduled_time,
+    endTime: exp ? addHours(b.scheduled_time, exp.duration_hours) : undefined,
     peopleLabel: `${b.number_of_people} persona${b.number_of_people === 1 ? "" : "s"}`,
     holderName: b.contact_name,
     total: b.total_paid,

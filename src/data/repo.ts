@@ -944,6 +944,33 @@ export async function adminLoadBookings(): Promise<Booking[]> {
   return (data ?? []).map((r) => ({ ...mapBooking(r), activity_id_ref: r.activities?.provider_profile_id }));
 }
 
+export interface AdminExperience {
+  id: string;
+  title: string;
+  publication_status: string;
+  is_active: boolean;
+  provider_profile_id: string | null;
+  price_per_person: number;
+  city?: string;
+}
+
+export async function adminLoadExperiences(): Promise<AdminExperience[]> {
+  const { data, error } = await sb()
+    .from("activities")
+    .select("id, title, publication_status, is_active, provider_profile_id, price_per_person, city")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((a: any) => ({
+    id: a.id,
+    title: a.title,
+    publication_status: a.publication_status,
+    is_active: a.is_active,
+    provider_profile_id: a.provider_profile_id ?? null,
+    price_per_person: Number(a.price_per_person) || 0,
+    city: a.city ?? undefined,
+  }));
+}
+
 export async function adminLoadRequests(): Promise<ConciergeRequest[]> {
   const { data, error } = await sb()
     .from("concierge_requests")

@@ -20,6 +20,7 @@ import { isLLMEnabled } from "@/ai/llm";
 import { EXPERIENCE_CATEGORIES } from "@/lib/categories";
 import { notify } from "@/state/toast";
 import { todayISO, parseISODate, dayName, monthName, cn } from "@/lib/utils";
+import { addHours } from "@/ai/nlp";
 import {
   Home,
   Ticket as TicketIcon,
@@ -570,6 +571,7 @@ function BookingDetailModal({
 
   const t: TicketData = {
     ...bookingToTicket(b),
+    endTime: exp ? addHours(b.scheduled_time, exp.duration_hours) : undefined,
     coverImage: exp?.featured_image,
     meetingPoint: exp?.location_address,
     whatsapp: exp?.provider?.whatsapp,

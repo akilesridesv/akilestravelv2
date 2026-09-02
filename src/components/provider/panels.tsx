@@ -13,7 +13,7 @@ import { ScheduleEditor } from "@/components/provider/ScheduleEditor";
 import { TierManager } from "@/components/provider/TierManager";
 import { TodayAgenda, DatedAgenda } from "@/components/provider/WeekAgenda";
 import { DateCalendar } from "@/components/provider/DateCalendar";
-import { shareTicket, shareTicketPdf, type TicketData } from "@/components/tourist/Ticket";
+import { shareTicket, downloadTicketPdf, type TicketData } from "@/components/tourist/Ticket";
 import { BookingChat } from "@/components/tourist/BookingChat";
 import { Modal } from "@/components/ui/modal";
 import { SearchBar } from "@/components/ui/SearchBar";
@@ -518,9 +518,11 @@ function BookingDetail({
       <span className="text-right text-sm font-medium">{value}</span>
     </div>
   );
+  const bookingExp = useApp((s) => s.experiences.find((e) => e.id === b.activity_id));
   const ticketData: TicketData = {
     code: b.confirmation_code,
     confirmed: b.booking_status === "confirmed",
+    endTime: bookingExp ? addHours(b.scheduled_time, bookingExp.duration_hours) : undefined,
     title: b.experience_title,
     date: b.scheduled_date,
     time: b.scheduled_time,
@@ -564,9 +566,9 @@ function BookingDetail({
         <Button
           variant="outline"
           className="flex-1"
-          onClick={() => shareTicketPdf(ticketData)}
+          onClick={() => downloadTicketPdf(ticketData)}
         >
-          <FileDown className="h-4 w-4" /> PDF
+          <FileDown className="h-4 w-4" /> Descargar PDF
         </Button>
       </div>
 
