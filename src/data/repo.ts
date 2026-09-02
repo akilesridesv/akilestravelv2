@@ -1,11 +1,15 @@
 import { supabase } from "@/lib/supabase";
 import type {
+  AppNotification,
   Booking,
+  BookingMessage,
+  ConciergeRequest,
   DateSlot,
   Experience,
   ProviderProfile,
   RecurringSchedule,
   TicketTier,
+  TouristProfile,
 } from "@/types/domain";
 import { withProviderDefaults } from "@/types/domain";
 
@@ -374,6 +378,7 @@ export interface Passenger {
 
 export interface NewBooking {
   activity_id: string;
+  user_id?: string | null; // set when a logged-in tourist books (links to their account)
   contact_name: string;
   contact_email: string;
   number_of_people: number;
@@ -405,13 +410,14 @@ export async function loadSlotBooked(
   return typeof data === "number" ? data : 0;
 }
 
-/** Create a booking as an anonymous tourist (user_id null — allowed by RLS). */
+/** Create a booking. When a tourist is logged in, user_id links it to their
+ *  account (RLS allows auth.uid() = user_id); otherwise it's an anon booking. */
 export async function createBooking(b: NewBooking): Promise<void> {
   // No .select() back: anon cannot read bookings under RLS, and we already hold
   // the confirmation code client-side.
   const { error } = await sb().from("bookings").insert({
     activity_id: b.activity_id,
-    user_id: null,
+    user_id: b.user_id ?? null,
     contact_name: b.contact_name,
     contact_email: b.contact_email,
     number_of_people: b.number_of_people,
@@ -545,5 +551,226 @@ export async function saveMessage(
     ...(m.created_at ? { created_at: m.created_at } : {}),
   });
   if (error) throw error;
+}
+
+// --- tourist account: profile, favorites, requests, notifications, chat -----
+
+/** Does this user have a provider profile? Used to pick tourist vs provider. */
+export async function loadProviderProfile(userId: string): Promise<ProviderProfile | null> {
+  const { data } = await sb()
+    .from("provider_profiles")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return data ? mapProvider(data) : null;
+}
+
+function mapTouristProfile(r: any): TouristProfile {
+  return {
+    id: r.id,
+    name: r.name ?? "",
+    email: r.email ?? "",
+    phone: r.phone ?? undefined,
+    avatar_url: r.avatar_url ?? undefined,
+    language: r.language ?? "es",
+    interests: r.interests ?? [],
+    created_at: r.created_at,
+  };
+}
+
+/** Load (or create) the tourist's personal profile row. */
+export async function ensureTouristProfile(
+  userId: string,
+  name: string,
+  email: string
+): Promise<TouristProfile> {
+  const c = sb();
+  const { data: existing } = await c.from("profiles").select("*").eq("id", userId).maybeSingle();
+  if (existing) return mapTouristProfile(existing);
+  const { data, error } = await c
+    .from("profiles")
+    .insert({ id: userId, name, email })
+    .select()
+    .single();
+  if (error) throw error;
+  return mapTouristProfile(data);
+}
+
+export async function saveTouristProfile(p: TouristProfile): Promise<void> {
+  const { error } = await sb()
+    .from("profiles")
+    .update({
+      name: p.name,
+      phone: p.phone ?? null,
+      avatar_url: p.avatar_url ?? null,
+      language: p.language,
+      interests: p.interests,
+    })
+    .eq("id", p.id);
+  if (error) throw error;
+}
+
+/** Bookings the current tourist owns (RLS returns only their own rows). */
+export async function loadMyBookings(): Promise<Booking[]> {
+  const { data, error } = await sb()
+    .from("bookings")
+    .select("*, activities(title)")
+    .not("user_id", "is", null)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapBooking);
+}
+
+/** Cancel one of the tourist's own bookings (RLS: auth.uid() = user_id). */
+export async function cancelMyBooking(id: string): Promise<void> {
+  const { error } = await sb().from("bookings").update({ booking_status: "cancelled" }).eq("id", id);
+  if (error) throw error;
+}
+
+// favorites --------------------------------------------------------------
+export async function loadFavorites(): Promise<string[]> {
+  const { data, error } = await sb().from("favorites").select("activity_id");
+  if (error) throw error;
+  return (data ?? []).map((r: any) => r.activity_id);
+}
+
+export async function addFavorite(userId: string, activityId: string): Promise<void> {
+  const { error } = await sb()
+    .from("favorites")
+    .upsert({ user_id: userId, activity_id: activityId }, { onConflict: "user_id,activity_id" });
+  if (error) throw error;
+}
+
+export async function removeFavorite(userId: string, activityId: string): Promise<void> {
+  const { error } = await sb()
+    .from("favorites")
+    .delete()
+    .eq("user_id", userId)
+    .eq("activity_id", activityId);
+  if (error) throw error;
+}
+
+// concierge requests -----------------------------------------------------
+function mapRequest(r: any): ConciergeRequest {
+  return {
+    id: r.id,
+    user_id: r.user_id,
+    kind: r.kind,
+    title: r.title,
+    details: r.details ?? "",
+    contact_email: r.contact_email ?? undefined,
+    contact_phone: r.contact_phone ?? undefined,
+    people: r.people ?? undefined,
+    date_from: r.date_from ?? undefined,
+    date_to: r.date_to ?? undefined,
+    budget: r.budget != null ? Number(r.budget) : undefined,
+    status: r.status,
+    created_at: r.created_at,
+    updated_at: r.updated_at ?? undefined,
+  };
+}
+
+export async function createConciergeRequest(
+  input: Omit<ConciergeRequest, "id" | "user_id" | "status" | "created_at" | "updated_at"> & {
+    user_id: string;
+  }
+): Promise<ConciergeRequest> {
+  const { data, error } = await sb()
+    .from("concierge_requests")
+    .insert({
+      user_id: input.user_id,
+      kind: input.kind,
+      title: input.title,
+      details: input.details,
+      contact_email: input.contact_email ?? null,
+      contact_phone: input.contact_phone ?? null,
+      people: input.people ?? null,
+      date_from: input.date_from ?? null,
+      date_to: input.date_to ?? null,
+      budget: input.budget ?? null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return mapRequest(data);
+}
+
+export async function loadConciergeRequests(): Promise<ConciergeRequest[]> {
+  const { data, error } = await sb()
+    .from("concierge_requests")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapRequest);
+}
+
+// notifications ----------------------------------------------------------
+function mapNotification(r: any): AppNotification {
+  return {
+    id: r.id,
+    user_id: r.user_id,
+    kind: r.kind,
+    title: r.title,
+    body: r.body ?? undefined,
+    link: r.link ?? undefined,
+    read_at: r.read_at ?? null,
+    created_at: r.created_at,
+  };
+}
+
+export async function loadNotifications(): Promise<AppNotification[]> {
+  const { data, error } = await sb()
+    .from("notifications")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return (data ?? []).map(mapNotification);
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  const { error } = await sb()
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+// per-booking chat -------------------------------------------------------
+function mapBookingMessage(r: any): BookingMessage {
+  return {
+    id: r.id,
+    booking_id: r.booking_id,
+    sender_user_id: r.sender_user_id,
+    sender_role: r.sender_role,
+    body: r.body,
+    created_at: r.created_at,
+    read_at: r.read_at ?? null,
+  };
+}
+
+export async function loadBookingMessages(bookingId: string): Promise<BookingMessage[]> {
+  const { data, error } = await sb()
+    .from("booking_messages")
+    .select("*")
+    .eq("booking_id", bookingId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(mapBookingMessage);
+}
+
+export async function sendBookingMessage(
+  bookingId: string,
+  senderUserId: string,
+  role: "tourist" | "provider",
+  body: string
+): Promise<BookingMessage> {
+  const { data, error } = await sb()
+    .from("booking_messages")
+    .insert({ booking_id: bookingId, sender_user_id: senderUserId, sender_role: role, body })
+    .select()
+    .single();
+  if (error) throw error;
+  return mapBookingMessage(data);
 }
 

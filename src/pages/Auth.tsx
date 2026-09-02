@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
@@ -11,6 +11,9 @@ import { Sparkles } from "lucide-react";
 
 export default function Auth() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const isTourist = params.get("role") === "tourist";
+  const home = isTourist ? "/cuenta" : "/panel";
   const remote = isSupabaseConfigured;
   const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
   const [email, setEmail] = useState("");
@@ -35,7 +38,7 @@ export default function Auth() {
       }
       const res =
         mode === "register"
-          ? await authSignUp(email.trim(), password, name.trim())
+          ? await authSignUp(email.trim(), password, name.trim(), isTourist ? "tourist" : "provider")
           : await authSignIn(email.trim(), password, name.trim());
       if (res.error) {
         setError(res.error);
@@ -46,7 +49,7 @@ export default function Auth() {
         setMode("login");
         return;
       }
-      navigate("/panel");
+      navigate(home);
     } finally {
       setBusy(false);
     }
@@ -71,21 +74,29 @@ export default function Auth() {
               <Sparkles className="h-6 w-6" />
             </div>
             <h1 className="font-display text-2xl">
-              {isForgot ? "Restablecer contraseña" : isRegister ? "Crea tu cuenta" : "Entra a tu copiloto"}
+              {isForgot
+                ? "Restablecer contraseña"
+                : isRegister
+                ? "Crea tu cuenta"
+                : isTourist
+                ? "Entra a tu cuenta"
+                : "Entra a tu copiloto"}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Gestiona tu negocio de experiencias y empieza a vender.
+              {isTourist
+                ? "Guarda tus viajes, tickets y experiencias favoritas."
+                : "Gestiona tu negocio de experiencias y empieza a vender."}
             </p>
           </div>
 
           <form onSubmit={submit} className="space-y-3">
             {(isRegister || !remote) && (
               <div>
-                <Label>Nombre del negocio</Label>
+                <Label>{isTourist ? "Tu nombre" : "Nombre del negocio"}</Label>
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Café Tours Ataco"
+                  placeholder={isTourist ? "Ej. Kevin Menjívar" : "Café Tours Ataco"}
                 />
               </div>
             )}
@@ -153,7 +164,7 @@ export default function Auth() {
               <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
                 <span className="h-px flex-1 bg-border" /> o <span className="h-px flex-1 bg-border" />
               </div>
-              <Button variant="outline" className="w-full" onClick={() => authGoogle()}>
+              <Button variant="outline" className="w-full" onClick={() => authGoogle(home)}>
                 Continuar con Google
               </Button>
               <button

@@ -11,6 +11,7 @@ import { TierManager } from "@/components/provider/TierManager";
 import { TodayAgenda, DatedAgenda } from "@/components/provider/WeekAgenda";
 import { DateCalendar } from "@/components/provider/DateCalendar";
 import { shareTicket, shareTicketPdf, type TicketData } from "@/components/tourist/Ticket";
+import { BookingChat } from "@/components/tourist/BookingChat";
 import { Modal } from "@/components/ui/modal";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { Pagination } from "@/components/ui/Pagination";
@@ -47,6 +48,7 @@ import {
   ChevronRight,
   Share2,
   FileDown,
+  MessageCircle,
   Ticket,
   Check as CheckIcon,
 } from "lucide-react";
@@ -482,6 +484,7 @@ function BookingDetail({
       <span className="text-right text-sm font-medium">{value}</span>
     </div>
   );
+  const [showChat, setShowChat] = useState(false);
   const ticketData: TicketData = {
     code: b.confirmation_code,
     confirmed: b.booking_status === "confirmed",
@@ -533,6 +536,19 @@ function BookingDetail({
           <FileDown className="h-4 w-4" /> PDF
         </Button>
       </div>
+
+      {/* Chat with the client (two-way; same thread the tourist sees) */}
+      {b.id && !b.id.startsWith("bk_") && (
+        <div className="border-t border-border pt-3">
+          {showChat ? (
+            <BookingChat booking={b} role="provider" />
+          ) : (
+            <Button variant="outline" className="w-full" onClick={() => setShowChat(true)}>
+              <MessageCircle className="h-4 w-4" /> Chat con el cliente
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

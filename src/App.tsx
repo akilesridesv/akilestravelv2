@@ -11,6 +11,7 @@ const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const ProviderDashboard = lazy(() => import("@/pages/ProviderDashboard"));
 const ExperienceDetail = lazy(() => import("@/pages/ExperienceDetail"));
 const ProviderPublic = lazy(() => import("@/pages/ProviderPublic"));
+const TouristAccount = lazy(() => import("@/pages/TouristAccount"));
 
 function RouteFallback() {
   return (
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/auth" element={<Auth />} />
           <Route path="/reset" element={<ResetPassword />} />
           <Route path="/panel" element={<ProviderDashboard />} />
+          <Route path="/cuenta" element={<TouristAccount />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

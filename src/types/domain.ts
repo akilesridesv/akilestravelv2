@@ -209,3 +209,74 @@ export type ExperienceDraft = Omit<
   // per-field provenance: was this value extracted from the prompt, or a default we filled in?
   _sources: Partial<Record<keyof Experience, "extracted" | "default">>;
 };
+
+// ---------------------------------------------------------------------------
+// Tourist side — account, requests, notifications, per-booking chat.
+// ---------------------------------------------------------------------------
+
+/** Which surface an authenticated user belongs to (a user with a provider
+ *  profile is a provider; everyone else is a tourist). */
+export type UserRole = "tourist" | "provider";
+
+/** The tourist's personal account profile (public.profiles + tourist fields). */
+export interface TouristProfile {
+  id: string; // = auth user id
+  name: string;
+  email: string;
+  phone?: string;
+  avatar_url?: string;
+  language: string; // "es" | "en" …
+  interests: string[]; // categories/tags that feed the concierge
+  created_at?: string;
+}
+
+export type ConciergeRequestKind =
+  | "experiencia"
+  | "vehiculo"
+  | "guia"
+  | "conductor"
+  | "alojamiento"
+  | "otro";
+
+export type ConciergeRequestStatus = "nueva" | "en_proceso" | "resuelta" | "cerrada";
+
+/** A special request the tourist sends to Akiles Travel (concierge real). */
+export interface ConciergeRequest {
+  id: string;
+  user_id: string;
+  kind: ConciergeRequestKind;
+  title: string;
+  details: string;
+  contact_email?: string;
+  contact_phone?: string;
+  people?: number;
+  date_from?: string;
+  date_to?: string;
+  budget?: number;
+  status: ConciergeRequestStatus;
+  created_at: string;
+  updated_at?: string;
+}
+
+/** A per-user notification (booking updates, reminders, request replies…). */
+export interface AppNotification {
+  id: string;
+  user_id: string;
+  kind: string; // info | booking | request | reminder
+  title: string;
+  body?: string;
+  link?: string;
+  read_at?: string | null;
+  created_at: string;
+}
+
+/** A message in the per-booking chat between the tourist and the provider. */
+export interface BookingMessage {
+  id: string;
+  booking_id: string;
+  sender_user_id: string;
+  sender_role: "tourist" | "provider";
+  body: string;
+  created_at: string;
+  read_at?: string | null;
+}

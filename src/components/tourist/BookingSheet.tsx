@@ -82,6 +82,9 @@ export function BookingSheet({
   initialPeople?: number;
 }) {
   const addBooking = useApp((s) => s.addBooking);
+  // Link the booking to the tourist's account when they're signed in.
+  const touristUserId = useApp((s) => (s.role === "tourist" ? s.user?.id : undefined));
+  const touristProfile = useApp((s) => s.touristProfile);
   const deps = useMemo(() => bookableDepartures(experience), [experience]);
   const dates = useMemo(() => bookableDates(deps), [deps]);
 
@@ -158,9 +161,15 @@ export function BookingSheet({
         const src = prev[adults + i];
         next.push(src?.kind === "child" ? src : { name: src?.name ?? "", kind: "child" });
       }
-      // carry email/phone onto the first slot
+      // carry email/phone onto the first slot, prefilling from the tourist's
+      // account when signed in and the field is still empty.
       if (next[0]) {
-        next[0] = { ...next[0], email: prev[0]?.email ?? "", phone: prev[0]?.phone ?? "" };
+        next[0] = {
+          ...next[0],
+          name: next[0].name || touristProfile?.name || "",
+          email: prev[0]?.email ?? touristProfile?.email ?? "",
+          phone: prev[0]?.phone ?? touristProfile?.phone ?? "",
+        };
       }
       return next;
     });
@@ -235,6 +244,7 @@ export function BookingSheet({
       if (isSupabaseConfigured) {
         await repo.createBooking({
           activity_id: experience.id,
+          user_id: touristUserId,
           contact_name: booking.contact_name,
           contact_email: booking.contact_email,
           number_of_people: people,

@@ -1,6 +1,14 @@
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useApp, type LocalUser } from "@/state/store";
-import { ensureProviderProfile, loadExperiences, loadBookings } from "@/data/repo";
+import type { UserRole } from "@/types/domain";
+import {
+  ensureProviderProfile,
+  loadProviderProfile,
+  ensureTouristProfile,
+  loadExperiences,
+  loadBookings,
+  loadMyBookings,
+} from "@/data/repo";
 
 export interface AuthResult {
   error?: string;
@@ -15,11 +23,31 @@ function sessionUser(u: { id: string; email?: string; user_metadata?: any }): Lo
   };
 }
 
-/** Load the provider's profile + data into the store after auth. */
-export async function bootstrapSession(user: LocalUser): Promise<void> {
+/** Load a PROVIDER's profile + data into the store (creates the profile if
+ *  missing — only used on provider sign-up/sign-in). */
+export async function bootstrapProvider(user: LocalUser): Promise<void> {
   const provider = await ensureProviderProfile(user.id, user.name);
   const [experiences, bookings] = await Promise.all([loadExperiences(user.id), loadBookings()]);
   useApp.getState().setSession(user, provider, experiences, bookings);
+}
+
+/** Load a TOURIST's account (profile + their own bookings) into the store. */
+export async function bootstrapTourist(user: LocalUser): Promise<void> {
+  const profile = await ensureTouristProfile(user.id, user.name, user.email);
+  const bookings = await loadMyBookings();
+  useApp.getState().setTouristSession(user, profile, bookings);
+}
+
+/** Restore path: pick the surface from whether a provider profile exists, so
+ *  we never turn a tourist into a provider by accident. */
+export async function bootstrapByRole(user: LocalUser): Promise<void> {
+  const provider = await loadProviderProfile(user.id);
+  if (provider) {
+    const [experiences, bookings] = await Promise.all([loadExperiences(user.id), loadBookings()]);
+    useApp.getState().setSession(user, provider, experiences, bookings);
+  } else {
+    await bootstrapTourist(user);
+  }
 }
 
 export async function authSignIn(email: string, password: string, name?: string): Promise<AuthResult> {
@@ -30,11 +58,16 @@ export async function authSignIn(email: string, password: string, name?: string)
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: error.message };
   const { data } = await supabase.auth.getUser();
-  if (data.user) await bootstrapSession(sessionUser(data.user));
+  if (data.user) await bootstrapByRole(sessionUser(data.user));
   return {};
 }
 
-export async function authSignUp(email: string, password: string, name: string): Promise<AuthResult> {
+export async function authSignUp(
+  email: string,
+  password: string,
+  name: string,
+  role: UserRole = "provider"
+): Promise<AuthResult> {
   if (!isSupabaseConfigured || !supabase) {
     useApp.getState().signIn(email, name);
     return {};
@@ -42,21 +75,23 @@ export async function authSignUp(email: string, password: string, name: string):
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { name } },
+    options: { data: { name, role } },
   });
   if (error) return { error: error.message };
   if (data.session && data.user) {
-    await bootstrapSession(sessionUser(data.user));
+    const u = sessionUser(data.user);
+    if (role === "tourist") await bootstrapTourist(u);
+    else await bootstrapProvider(u);
     return {};
   }
   return { needsConfirm: true };
 }
 
-export async function authGoogle(): Promise<AuthResult> {
+export async function authGoogle(next = "/panel"): Promise<AuthResult> {
   if (!supabase) return { error: "Configura Supabase para usar Google." };
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: window.location.origin + "/panel" },
+    options: { redirectTo: window.location.origin + next },
   });
   return error ? { error: error.message } : {};
 }
@@ -94,7 +129,7 @@ export function initAuth(): () => void {
   const boot = (user: LocalUser) => {
     if (loadedUserId === user.id) return;
     loadedUserId = user.id;
-    bootstrapSession(user).catch((e) => {
+    bootstrapByRole(user).catch((e) => {
       console.error(e);
       loadedUserId = null; // allow a retry if the load failed
       useApp.getState().setAuthReady();

@@ -5,6 +5,8 @@ import type {
   Experience,
   ExperienceDraft,
   ProviderProfile,
+  TouristProfile,
+  UserRole,
 } from "@/types/domain";
 import { DEFAULT_PREFERENCES, withProviderDefaults } from "@/types/domain";
 import { uid } from "@/lib/utils";
@@ -22,11 +24,13 @@ export interface LocalUser {
 interface AppState {
   // auth
   user: LocalUser | null;
+  role: UserRole | null; // which surface the signed-in user belongs to
   provider: ProviderProfile | null;
+  touristProfile: TouristProfile | null;
   authReady: boolean; // false while restoring a Supabase session
   // domain
   experiences: Experience[];
-  bookings: Booking[];
+  bookings: Booking[]; // provider: bookings for their activities · tourist: their own
   // The experience whose card is currently open in the chat — the copilot's
   // default target for edits so it never jumps to a different one by accident.
   activeExperienceId: string | null;
@@ -40,6 +44,8 @@ interface AppState {
     experiences: Experience[],
     bookings: Booking[]
   ) => void;
+  setTouristSession: (user: LocalUser, profile: TouristProfile, bookings: Booking[]) => void;
+  setTouristProfile: (patch: Partial<TouristProfile>) => void;
   setAuthReady: () => void;
 
   // provider actions
@@ -112,7 +118,9 @@ export const useApp = create<AppState>()(
   persist(
     (set, get) => ({
       user: null,
+      role: null,
       provider: null,
+      touristProfile: null,
       authReady: !remote, // local mode is ready immediately
       experiences: [],
       bookings: [],
@@ -126,14 +134,28 @@ export const useApp = create<AppState>()(
             : { id: uid("usr"), email, name: name || email.split("@")[0] };
         const provider = get().provider ?? makeProvider(user);
         const bookings = get().bookings.length ? get().bookings : seedBookings();
-        set({ user, provider, bookings, authReady: true });
+        set({ user, role: "provider", provider, bookings, authReady: true });
       },
 
       signOut: () =>
-        set({ user: null, provider: null, experiences: [], bookings: [], activeExperienceId: null }),
+        set({
+          user: null,
+          role: null,
+          provider: null,
+          touristProfile: null,
+          experiences: [],
+          bookings: [],
+          activeExperienceId: null,
+        }),
 
       setSession: (user, provider, experiences, bookings) =>
-        set({ user, provider, experiences, bookings, authReady: true }),
+        set({ user, role: "provider", provider, touristProfile: null, experiences, bookings, authReady: true }),
+
+      setTouristSession: (user, touristProfile, bookings) =>
+        set({ user, role: "tourist", provider: null, touristProfile, experiences: [], bookings, authReady: true }),
+
+      setTouristProfile: (patch) =>
+        set((s) => (s.touristProfile ? { touristProfile: { ...s.touristProfile, ...patch } } : {})),
 
       setAuthReady: () => set({ authReady: true }),
 
