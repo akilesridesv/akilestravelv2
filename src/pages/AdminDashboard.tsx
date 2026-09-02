@@ -52,6 +52,7 @@ export default function AdminDashboard() {
   const authReady = useApp((s) => s.authReady);
   const user = useApp((s) => s.user);
   const isAdmin = useApp((s) => s.isAdmin);
+  const hasProvider = useApp((s) => !!s.provider);
 
   const [ready, setReady] = useState(false);
   const [allowed, setAllowed] = useState(false);
@@ -121,7 +122,15 @@ export default function AdminDashboard() {
             <span className="rounded-full bg-ink px-2 py-0.5 text-xs font-semibold text-background">Admin</span>
           </div>
           <div className="flex items-center gap-2">
-            <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
+            {hasProvider && (
+              <button
+                onClick={() => navigate("/panel")}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm font-medium transition hover:bg-accent"
+              >
+                <Store className="h-4 w-4" /> Panel proveedor
+              </button>
+            )}
+            <Link to="/" className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline">
               Ver sitio
             </Link>
             <button
