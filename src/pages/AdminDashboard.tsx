@@ -8,6 +8,7 @@ import type { Booking, ConciergeRequest, ProviderProfile, TouristProfile } from 
 import { resolveFees, type FeeDefaults, type FeeType } from "@/lib/fees";
 import { EL_SALVADOR_BANKS, type BankAccountType } from "@/lib/banks";
 import { SupportChat } from "@/components/support/SupportChat";
+import { Ticket as TicketCard, type TicketData } from "@/components/tourist/Ticket";
 import type { Passenger } from "@/data/repo";
 import { Logo } from "@/components/ui/Logo";
 import { Button } from "@/components/ui/button";
@@ -585,6 +586,52 @@ function ProviderModal({
   );
 }
 
+function BookingTicketModal({ booking: b, onClose }: { booking: Booking; onClose: () => void }) {
+  const [exp, setExp] = useState<import("@/data/repo").PublicExperience | null>(null);
+  useEffect(() => {
+    let alive = true;
+    repo.loadPublishedExperience(b.activity_id).then((e) => alive && setExp(e)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [b.activity_id]);
+
+  const t: TicketData = {
+    code: b.confirmation_code,
+    confirmed: b.booking_status === "confirmed",
+    title: b.experience_title,
+    date: b.scheduled_date,
+    time: b.scheduled_time,
+    peopleLabel: `${b.number_of_people} persona${b.number_of_people === 1 ? "" : "s"}`,
+    holderName: b.contact_name,
+    total: b.total_paid,
+    coverImage: exp?.featured_image,
+    meetingPoint: exp?.location_address,
+    whatsapp: exp?.provider?.whatsapp,
+    contactEmail: b.contact_email,
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Ticket de la reserva">
+      <div className="space-y-3">
+        <TicketCard data={t} />
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-xl bg-secondary/40 p-3 text-xs text-muted-foreground">
+          <span>Correo: <b className="text-foreground">{b.contact_email}</b></span>
+          <span>Estado: <b className="text-foreground">{b.booking_status}</b></span>
+          <span>Pagó: <b className="text-foreground">{formatUSD(b.total_paid)}</b></span>
+          <span>Comisión Akiles: <b className="text-foreground">{formatUSD(b.platform_commission ?? 0)}</b></span>
+          <span>Neto proveedor: <b className="text-foreground">{formatUSD(b.provider_payout ?? b.subtotal_paid)}</b></span>
+          {b.passengers && b.passengers.length > 0 && (
+            <span className="col-span-2">
+              Asistentes: <b className="text-foreground">{b.passengers.map((p) => p.name).filter(Boolean).join(", ")}</b>
+            </span>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function FeeInput({
   label,
   type,
@@ -1002,7 +1049,7 @@ function PayoutModal({
   onDone: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set(unpaid.map((b) => b.id)));
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [ticketOf, setTicketOf] = useState<Booking | null>(null);
   const ba = provider.bank_account;
   const [bank, setBank] = useState(ba?.bank ?? "");
   const [account, setAccount] = useState(ba?.account_number ?? "");
@@ -1080,45 +1127,23 @@ function PayoutModal({
           </div>
           <div className="grid max-h-52 gap-1.5 overflow-y-auto">
             {unpaid.map((b) => (
-              <div key={b.id} className="rounded-xl border border-border p-2.5 text-sm">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} className="h-4 w-4" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{b.experience_title}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {b.scheduled_date} · {b.confirmation_code}
-                    </span>
+              <div key={b.id} className="flex items-center gap-2 rounded-xl border border-border p-2.5 text-sm">
+                <input type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} className="h-4 w-4" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{b.experience_title}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {b.scheduled_date} · {b.confirmation_code}
                   </span>
-                  <span className="shrink-0 font-medium">{formatUSD(payoutOf(b))}</span>
-                  <button
-                    onClick={() =>
-                      setExpanded((prev) => {
-                        const n = new Set(prev);
-                        n.has(b.id) ? n.delete(b.id) : n.add(b.id);
-                        return n;
-                      })
-                    }
-                    className="shrink-0 text-xs text-teal hover:underline"
-                  >
-                    {expanded.has(b.id) ? "Ocultar" : "Detalle"}
-                  </button>
-                </div>
-                {expanded.has(b.id) && (
-                  <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
-                    <span>Cliente: <b className="text-foreground">{b.contact_name}</b></span>
-                    <span>Correo: <b className="text-foreground">{b.contact_email}</b></span>
-                    <span>Fecha: <b className="text-foreground">{b.scheduled_date} {b.scheduled_time}</b></span>
-                    <span>Personas: <b className="text-foreground">{b.number_of_people}</b></span>
-                    <span>Estado: <b className="text-foreground">{b.booking_status}</b></span>
-                    <span>Pagó: <b className="text-foreground">{formatUSD(b.total_paid)}</b></span>
-                    <span>Comisión: <b className="text-foreground">{formatUSD(b.platform_commission ?? 0)}</b></span>
-                    <span>Neto proveedor: <b className="text-foreground">{formatUSD(payoutOf(b))}</b></span>
-                  </div>
-                )}
+                </span>
+                <span className="shrink-0 font-medium">{formatUSD(payoutOf(b))}</span>
+                <button onClick={() => setTicketOf(b)} className="shrink-0 text-xs text-teal hover:underline">
+                  Ver ticket
+                </button>
               </div>
             ))}
             {unpaid.length === 0 && <p className="text-sm text-muted-foreground">Sin reservas pendientes.</p>}
           </div>
+          {ticketOf && <BookingTicketModal booking={ticketOf} onClose={() => setTicketOf(null)} />}
         </div>
 
         {/* Bank / deposit details */}
