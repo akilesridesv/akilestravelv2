@@ -13,6 +13,8 @@ import {
 } from "@/components/provider/panels";
 import { ProfilePanel } from "@/components/provider/ProfilePanel";
 import { Badge } from "@/components/ui/card";
+import { Modal } from "@/components/ui/modal";
+import { SupportChat } from "@/components/support/SupportChat";
 import { cn } from "@/lib/utils";
 import {
   MessageSquare,
@@ -22,6 +24,7 @@ import {
   BadgeCheck,
   Clock3,
   LogOut,
+  LifeBuoy,
   User,
 } from "lucide-react";
 
@@ -41,6 +44,7 @@ export default function ProviderDashboard() {
   const provider = useApp((s) => s.provider);
   const isAdmin = useApp((s) => s.isAdmin);
   const authReady = useApp((s) => s.authReady);
+  const [showSupport, setShowSupport] = useState(false);
   const isDesktop = useIsDesktop();
   const [activePanel, setActivePanel] = useState<Panel>("experiences");
   const [page, setPage] = useState<0 | 1>(0); // mobile pager: 0 = chat, 1 = panel
@@ -123,10 +127,16 @@ export default function ProviderDashboard() {
             </div>
           </div>
         </button>
+        <button
+          onClick={() => setShowSupport(true)}
+          className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3 text-sm text-muted-foreground transition hover:bg-accent"
+        >
+          <LifeBuoy className="h-4 w-4" /> <span className="hidden sm:inline">Soporte</span>
+        </button>
         {isAdmin && (
           <button
             onClick={() => navigate("/admin")}
-            className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-full bg-ink px-3 text-xs font-semibold text-background transition hover:opacity-90"
+            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-ink px-3 text-xs font-semibold text-background transition hover:opacity-90"
           >
             Admin
           </button>
@@ -136,10 +146,7 @@ export default function ProviderDashboard() {
             await authSignOut();
             navigate("/");
           }}
-          className={cn(
-            "inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground hover:bg-accent",
-            !isAdmin && "ml-auto"
-          )}
+          className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground hover:bg-accent"
         >
           <LogOut className="h-4 w-4" /> <span className="hidden sm:inline">Salir</span>
         </button>
@@ -203,6 +210,22 @@ export default function ProviderDashboard() {
             ))}
           </nav>
         </>
+      )}
+
+      {showSupport && (
+        <Modal open onClose={() => setShowSupport(false)} title="Soporte · Akiles Travel">
+          <p className="mb-2 text-xs text-muted-foreground">
+            Escríbele al equipo de Akiles Travel para cualquier duda, consulta o soporte.
+          </p>
+          {user && (
+            <SupportChat
+              kind="user"
+              refId={user.id}
+              role="provider"
+              emptyHint="Escríbele a Akiles Travel; te responderemos aquí."
+            />
+          )}
+        </Modal>
       )}
     </div>
   );

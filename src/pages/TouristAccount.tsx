@@ -15,6 +15,7 @@ import { ExperienceCard } from "@/components/tourist/ExperienceCard";
 import { Ticket, type TicketData } from "@/components/tourist/Ticket";
 import { BookingChat } from "@/components/tourist/BookingChat";
 import { ConciergeChat } from "@/components/tourist/ConciergeChat";
+import { SupportChat } from "@/components/support/SupportChat";
 import { isLLMEnabled } from "@/ai/llm";
 import { EXPERIENCE_CATEGORIES } from "@/lib/categories";
 import { notify } from "@/state/toast";
@@ -740,6 +741,7 @@ function Solicitudes({
   onCreated: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [chatReq, setChatReq] = useState<ConciergeRequest | null>(null);
   const statusLabel: Record<string, string> = {
     nueva: "Nueva",
     en_proceso: "En proceso",
@@ -771,7 +773,15 @@ function Solicitudes({
                 </span>
               </div>
               {r.details && <p className="mt-2 text-sm text-foreground/80">{r.details}</p>}
-              <p className="mt-2 text-xs text-muted-foreground">{fmtDate(r.created_at.slice(0, 10))}</p>
+              <div className="mt-2 flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">{fmtDate(r.created_at.slice(0, 10))}</p>
+                <button
+                  onClick={() => setChatReq(r)}
+                  className="inline-flex items-center gap-1 text-xs text-teal hover:underline"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" /> Chatear con Akiles
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -793,6 +803,20 @@ function Solicitudes({
             onCreated();
           }}
         />
+      )}
+
+      {chatReq && (
+        <Modal open onClose={() => setChatReq(null)} title={chatReq.title}>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Chatea con el equipo de Akiles Travel sobre esta solicitud.
+          </p>
+          <SupportChat
+            kind="request"
+            refId={chatReq.id}
+            role="tourist"
+            emptyHint="Cuéntanos más sobre lo que necesitas; te ayudamos aquí."
+          />
+        </Modal>
       )}
     </div>
   );
@@ -988,6 +1012,7 @@ function Perfil() {
 }
 
 function Ayuda() {
+  const user = useApp((s) => s.user);
   const faqs = [
     { q: "¿Cómo reservo una experiencia?", a: "Explora el catálogo, abre una experiencia y toca “Reservar”. Verás tu ticket aquí en Mis viajes." },
     { q: "¿Puedo cancelar?", a: "Sí, desde Mis viajes → abre la reserva → Cancelar. Aplica la política de cancelación de cada experiencia." },
@@ -1005,18 +1030,16 @@ function Ayuda() {
         ))}
       </div>
       <div className="rounded-2xl border border-border bg-card p-5">
-        <p className="font-medium">¿Necesitas hablar con nosotros?</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Escríbenos y el equipo de Akiles Travel te ayudará.
-        </p>
-        <a
-          href="https://wa.me/50300000000"
-          target="_blank"
-          rel="noreferrer"
-          className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-sm font-medium text-background"
-        >
-          <MessageCircle className="h-4 w-4" /> Contactar soporte
-        </a>
+        <p className="mb-1 font-medium">Chat con soporte de Akiles Travel</p>
+        <p className="mb-3 text-sm text-muted-foreground">Escríbenos y el equipo te ayudará por aquí.</p>
+        {user && (
+          <SupportChat
+            kind="user"
+            refId={user.id}
+            role="tourist"
+            emptyHint="Cuéntanos en qué te ayudamos; te respondemos aquí."
+          />
+        )}
       </div>
     </div>
   );

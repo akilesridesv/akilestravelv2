@@ -7,6 +7,8 @@ import * as repo from "@/data/repo";
 import type { Booking, ConciergeRequest, ProviderProfile, TouristProfile } from "@/types/domain";
 import { resolveFees, type FeeDefaults, type FeeType } from "@/lib/fees";
 import { EL_SALVADOR_BANKS, type BankAccountType } from "@/lib/banks";
+import { SupportChat } from "@/components/support/SupportChat";
+import type { Passenger } from "@/data/repo";
 import { Logo } from "@/components/ui/Logo";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -27,6 +29,7 @@ import {
   BadgeCheck,
   Info,
   TrendingUp,
+  MessageCircle,
 } from "lucide-react";
 
 type Section = "resumen" | "turistas" | "proveedores" | "reservas" | "solicitudes" | "facturacion" | "ajustes";
@@ -297,6 +300,7 @@ function Resumen({
 
 function Turistas({ tourists, bookings }: { tourists: TouristProfile[]; bookings: Booking[] }) {
   const [open, setOpen] = useState<TouristProfile | null>(null);
+  const [tab, setTab] = useState<"info" | "chat">("info");
   const bookingsOf = (uid: string) => bookings.filter((b) => b.user_id === uid);
   return (
     <div className="space-y-4">
@@ -322,27 +326,35 @@ function Turistas({ tourists, bookings }: { tourists: TouristProfile[]; bookings
 
       {open && (
         <Modal open onClose={() => setOpen(null)} title={open.name || open.email}>
-          <div className="space-y-3 text-sm">
-            <Field k="Correo" v={open.email} />
-            {open.phone && <Field k="Teléfono" v={open.phone} />}
-            {open.interests?.length > 0 && <Field k="Intereses" v={open.interests.join(", ")} />}
-            <div>
-              <p className="mb-1 font-medium">Reservas</p>
-              <div className="grid gap-2">
-                {bookingsOf(open.id).map((b) => (
-                  <div key={b.id} className="rounded-xl border border-border p-2.5">
-                    <p className="font-medium">{b.experience_title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {b.scheduled_date} {b.scheduled_time} · {b.booking_status} · {formatUSD(b.total_paid)}
-                    </p>
-                  </div>
-                ))}
-                {bookingsOf(open.id).length === 0 && (
-                  <p className="text-muted-foreground">Sin reservas.</p>
-                )}
+          <div className="mb-3 flex gap-1.5">
+            <MiniTab active={tab === "info"} onClick={() => setTab("info")}>Info y reservas</MiniTab>
+            <MiniTab active={tab === "chat"} onClick={() => setTab("chat")}>
+              <MessageCircle className="h-3.5 w-3.5" /> Chat de soporte
+            </MiniTab>
+          </div>
+          {tab === "info" ? (
+            <div className="space-y-3 text-sm">
+              <Field k="Correo" v={open.email} />
+              {open.phone && <Field k="Teléfono" v={open.phone} />}
+              {open.interests?.length > 0 && <Field k="Intereses" v={open.interests.join(", ")} />}
+              <div>
+                <p className="mb-1 font-medium">Reservas</p>
+                <div className="grid gap-2">
+                  {bookingsOf(open.id).map((b) => (
+                    <div key={b.id} className="rounded-xl border border-border p-2.5">
+                      <p className="font-medium">{b.experience_title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {b.scheduled_date} {b.scheduled_time} · {b.booking_status} · {formatUSD(b.total_paid)}
+                      </p>
+                    </div>
+                  ))}
+                  {bookingsOf(open.id).length === 0 && <p className="text-muted-foreground">Sin reservas.</p>}
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <SupportChat kind="user" refId={open.id} role="admin" emptyHint="Escríbele al turista para darle soporte." />
+          )}
         </Modal>
       )}
     </div>
@@ -413,6 +425,7 @@ function ProviderModal({
   onChanged: () => void;
 }) {
   const eff = resolveFees(provider, feeDefaults ?? undefined);
+  const [tab, setTab] = useState<"gestion" | "chat">("gestion");
   const [tType, setTType] = useState<FeeType>(eff.tourist.type);
   const [tVal, setTVal] = useState(String(eff.tourist.value));
   const [cType, setCType] = useState<FeeType>(eff.commission.type);
@@ -455,6 +468,20 @@ function ProviderModal({
 
   return (
     <Modal open onClose={onClose} title={provider.business_name}>
+      <div className="mb-3 flex gap-1.5">
+        <MiniTab active={tab === "gestion"} onClick={() => setTab("gestion")}>Gestión</MiniTab>
+        <MiniTab active={tab === "chat"} onClick={() => setTab("chat")}>
+          <MessageCircle className="h-3.5 w-3.5" /> Chat con proveedor
+        </MiniTab>
+      </div>
+      {tab === "chat" ? (
+        <SupportChat
+          kind="user"
+          refId={provider.user_id}
+          role="admin"
+          emptyHint="Escríbele al proveedor para resolver dudas o consultas."
+        />
+      ) : (
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <VerifPill status={provider.verification_status} />
@@ -515,6 +542,7 @@ function ProviderModal({
           </div>
         </div>
       </div>
+      )}
     </Modal>
   );
 }
@@ -562,6 +590,7 @@ function Reservas({
   onChanged: () => void;
 }) {
   const [q, setQ] = useState("");
+  const [edit, setEdit] = useState<Booking | null>(null);
   const filtered = bookings.filter(
     (b) =>
       !q ||
@@ -601,18 +630,127 @@ function Reservas({
               </div>
               <div className="flex shrink-0 flex-col items-end gap-2">
                 <StatusPill status={b.booking_status} />
-                {["pending_approval", "pending", "confirmed"].includes(b.booking_status) && (
-                  <button onClick={() => cancel(b)} className="text-xs text-destructive hover:underline">
-                    Cancelar
+                <div className="flex gap-2">
+                  <button onClick={() => setEdit(b)} className="text-xs text-teal hover:underline">
+                    Editar
                   </button>
-                )}
+                  {["pending_approval", "pending", "confirmed"].includes(b.booking_status) && (
+                    <button onClick={() => cancel(b)} className="text-xs text-destructive hover:underline">
+                      Cancelar
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         ))}
         {filtered.length === 0 && <Empty text="Sin reservas." />}
       </div>
+
+      {edit && (
+        <BookingEditModal
+          booking={edit}
+          onClose={() => setEdit(null)}
+          onSaved={() => {
+            setEdit(null);
+            onChanged();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function BookingEditModal({
+  booking,
+  onClose,
+  onSaved,
+}: {
+  booking: Booking;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(booking.contact_name);
+  const [email, setEmail] = useState(booking.contact_email);
+  const [pax, setPax] = useState<{ name: string; kind?: "adult" | "child"; email?: string; phone?: string }[]>(
+    booking.passengers && booking.passengers.length
+      ? booking.passengers
+      : [{ name: booking.contact_name, kind: "adult", phone: "" }]
+  );
+  const [busy, setBusy] = useState(false);
+
+  function setPaxField(i: number, field: "name" | "phone", value: string) {
+    setPax((prev) => prev.map((p, idx) => (idx === i ? { ...p, [field]: value } : p)));
+  }
+
+  async function save() {
+    setBusy(true);
+    try {
+      await repo.adminUpdateBooking(booking.id, {
+        contact_name: name.trim(),
+        contact_email: email.trim(),
+        passengers: pax.map((p) => ({ ...p, name: p.name.trim() })) as Passenger[],
+      });
+      notify("Reserva actualizada.");
+      onSaved();
+    } catch {
+      notify("No pude actualizar la reserva.", "warning");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Editar reserva">
+      <div className="space-y-4">
+        <div className="rounded-xl bg-secondary/40 p-3 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground">{booking.experience_title}</p>
+          <p>
+            {booking.scheduled_date} {booking.scheduled_time} · {booking.confirmation_code} ·{" "}
+            {booking.booking_status} · {formatUSD(booking.total_paid)}
+          </p>
+          <p className="mt-1">Solo datos del cliente; el precio y el proveedor no cambian.</p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label>Nombre del titular</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div>
+            <Label>Correo del titular</Label>
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+        </div>
+
+        <div>
+          <Label>Asistentes</Label>
+          <div className="grid gap-2">
+            {pax.map((p, i) => (
+              <div key={i} className="flex gap-2">
+                <Input
+                  value={p.name}
+                  onChange={(e) => setPaxField(i, "name", e.target.value)}
+                  placeholder={`Asistente ${i + 1}${i === 0 ? " (titular)" : ""}`}
+                />
+                {i === 0 && (
+                  <Input
+                    value={p.phone ?? ""}
+                    onChange={(e) => setPaxField(i, "phone", e.target.value)}
+                    placeholder="Teléfono"
+                    className="max-w-[40%]"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <Button className="w-full" disabled={busy} onClick={save}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Guardar cambios
+        </Button>
+      </div>
+    </Modal>
   );
 }
 
@@ -621,6 +759,7 @@ function Reservas({
 const REQ_STATUSES = ["nueva", "en_proceso", "resuelta", "cerrada"];
 
 function Solicitudes({ requests, onChanged }: { requests: ConciergeRequest[]; onChanged: () => void }) {
+  const [open, setOpen] = useState<ConciergeRequest | null>(null);
   async function setStatus(id: string, status: string) {
     try {
       await repo.adminSetRequestStatus(id, status);
@@ -646,22 +785,51 @@ function Solicitudes({ requests, onChanged }: { requests: ConciergeRequest[]; on
                   {r.date_from ? `· ${r.date_from}${r.date_to ? ` → ${r.date_to}` : ""}` : ""}
                 </p>
               </div>
-              <select
-                value={r.status}
-                onChange={(e) => setStatus(r.id, e.target.value)}
-                className="h-9 shrink-0 rounded-xl border border-input bg-card px-2 text-sm"
-              >
-                {REQ_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+              <div className="flex shrink-0 flex-col items-end gap-2">
+                <select
+                  value={r.status}
+                  onChange={(e) => setStatus(r.id, e.target.value)}
+                  className="h-9 rounded-xl border border-input bg-card px-2 text-sm"
+                >
+                  {REQ_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <button onClick={() => setOpen(r)} className="inline-flex items-center gap-1 text-xs text-teal hover:underline">
+                  <MessageCircle className="h-3.5 w-3.5" /> Abrir y chatear
+                </button>
+              </div>
             </div>
           </div>
         ))}
         {requests.length === 0 && <Empty text="Sin solicitudes." />}
       </div>
+
+      {open && (
+        <Modal open onClose={() => setOpen(null)} title={open.title}>
+          <div className="mb-3 space-y-1 rounded-xl bg-secondary/40 p-3 text-xs text-muted-foreground">
+            <p className="text-sm font-medium text-foreground">{open.title}</p>
+            <p className="uppercase tracking-wide">{open.kind}</p>
+            {open.details && <p className="text-foreground/80">{open.details}</p>}
+            <p>
+              {open.contact_email ?? ""} {open.people ? `· ${open.people} pers.` : ""}{" "}
+              {open.date_from ? `· ${open.date_from}${open.date_to ? ` → ${open.date_to}` : ""}` : ""}
+            </p>
+          </div>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Chatea con el turista como Akiles Travel. Puedes enviarle una experiencia (búscala por
+            proveedor) o el contacto de un proveedor/guía externo de confianza.
+          </p>
+          <SupportChat
+            kind="request"
+            refId={open.id}
+            role="admin"
+            emptyHint="Escríbele al turista para ayudarle con esta solicitud."
+          />
+        </Modal>
+      )}
     </div>
   );
 }
@@ -1026,6 +1194,20 @@ function Field({ k, v }: { k: string; v: React.ReactNode }) {
       <span className="text-muted-foreground">{k}</span>
       <span className="text-right font-medium">{v}</span>
     </div>
+  );
+}
+
+function MiniTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition",
+        active ? "bg-ink text-background" : "border border-border text-muted-foreground hover:bg-accent"
+      )}
+    >
+      {children}
+    </button>
   );
 }
 

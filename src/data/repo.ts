@@ -8,6 +8,7 @@ import type {
   Experience,
   ProviderProfile,
   RecurringSchedule,
+  SupportMessage,
   TicketTier,
   TouristProfile,
 } from "@/types/domain";
@@ -470,6 +471,7 @@ function mapBooking(r: any): Booking {
     provider_payout: r.provider_payout != null ? Number(r.provider_payout) : undefined,
     payout_id: r.payout_id ?? null,
     user_id: r.user_id ?? null,
+    passengers: Array.isArray(r.passengers) ? r.passengers : undefined,
     created_at: r.created_at,
   };
 }
@@ -804,6 +806,60 @@ export async function loadBookingMessages(bookingId: string): Promise<BookingMes
     .order("created_at", { ascending: true });
   if (error) throw error;
   return (data ?? []).map(mapBookingMessage);
+}
+
+// --- support messaging -------------------------------------------------------
+
+function mapSupport(r: any): SupportMessage {
+  return {
+    id: r.id,
+    thread_kind: r.thread_kind,
+    thread_ref: r.thread_ref,
+    sender_role: r.sender_role,
+    sender_user_id: r.sender_user_id,
+    body: r.body ?? "",
+    meta: r.meta ?? null,
+    created_at: r.created_at,
+  };
+}
+
+export async function loadSupportMessages(
+  kind: "user" | "request",
+  ref: string
+): Promise<SupportMessage[]> {
+  const { data, error } = await sb()
+    .from("support_messages")
+    .select("*")
+    .eq("thread_kind", kind)
+    .eq("thread_ref", ref)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(mapSupport);
+}
+
+export async function sendSupportMessage(
+  kind: "user" | "request",
+  ref: string,
+  senderRole: "admin" | "tourist" | "provider",
+  body: string,
+  meta?: SupportMessage["meta"]
+): Promise<SupportMessage> {
+  const { data, error } = await sb()
+    .from("support_messages")
+    .insert({ thread_kind: kind, thread_ref: ref, sender_role: senderRole, body, meta: meta ?? null })
+    .select()
+    .single();
+  if (error) throw error;
+  return mapSupport(data);
+}
+
+/** Admin edits a booking's contact/attendee info (no price/provider changes). */
+export async function adminUpdateBooking(
+  id: string,
+  patch: { contact_name?: string; contact_email?: string; number_of_people?: number; passengers?: Passenger[] }
+): Promise<void> {
+  const { error } = await sb().from("bookings").update(patch).eq("id", id);
+  if (error) throw error;
 }
 
 // --- fees + admin ------------------------------------------------------------

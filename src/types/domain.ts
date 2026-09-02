@@ -214,7 +214,8 @@ export interface Booking {
   provider_payout?: number; // net paid to the provider
   payout_id?: string | null; // set once included in a provider payout
   user_id?: string | null; // the tourist account, when booked signed in
-  activity_id_ref?: string; // (reserved)
+  activity_id_ref?: string; // provider_profile_id (admin join)
+  passengers?: { name: string; kind?: "adult" | "child"; email?: string; phone?: string }[];
   created_at: string;
 }
 
@@ -284,6 +285,23 @@ export interface AppNotification {
   body?: string;
   link?: string;
   read_at?: string | null;
+  created_at: string;
+}
+
+export type SupportMeta =
+  | { type: "experience"; experience_id: string }
+  | { type: "contact"; name: string; phone?: string; note?: string };
+
+/** A support message: admin ↔ a user (tourist/provider), or admin ↔ tourist
+ *  about a specific concierge request. */
+export interface SupportMessage {
+  id: string;
+  thread_kind: "user" | "request";
+  thread_ref: string;
+  sender_role: "admin" | "tourist" | "provider";
+  sender_user_id: string;
+  body: string;
+  meta?: SupportMeta | null;
   created_at: string;
 }
 
