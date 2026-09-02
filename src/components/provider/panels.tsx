@@ -276,6 +276,7 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
   const bookings = useApp((s) => s.bookings);
   const setStatus = useApp((s) => s.setBookingStatus);
   const [modalId, setModalId] = useState<string | null>(null);
+  const [chatId, setChatId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [statusF, setStatusF] = useState<string>("");
@@ -294,6 +295,7 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
   const pageSafe = Math.min(page, pageCount - 1);
   const items = filtered.slice(pageSafe * PAGE, pageSafe * PAGE + PAGE);
   const active = bookings.find((b) => b.id === modalId) ?? null;
+  const chatBooking = bookings.find((b) => b.id === chatId) ?? null;
 
   const resetPage = () => setPage(0);
 
@@ -414,25 +416,40 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
       ) : (
         <>
           {items.map((b) => (
-            <button
+            <div
               key={b.id}
-              type="button"
-              onClick={() => setModalId(b.id)}
-              className="flex w-full items-start gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:bg-accent"
+              className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm"
             >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="truncate font-medium">{b.contact_name}</h3>
-                  <BookingBadge status={b.booking_status} />
+              <button
+                type="button"
+                onClick={() => setModalId(b.id)}
+                className="flex min-w-0 flex-1 items-start gap-3 text-left"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="truncate font-medium">{b.contact_name}</h3>
+                    <BookingBadge status={b.booking_status} />
+                  </div>
+                  <p className="mt-0.5 truncate text-sm text-muted-foreground">{b.experience_title}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {b.number_of_people} pers · {b.scheduled_date} {b.scheduled_time} ·{" "}
+                    {formatUSD(b.total_paid)}
+                  </p>
                 </div>
-                <p className="mt-0.5 truncate text-sm text-muted-foreground">{b.experience_title}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {b.number_of_people} pers · {b.scheduled_date} {b.scheduled_time} ·{" "}
-                  {formatUSD(b.total_paid)}
-                </p>
-              </div>
+              </button>
+              {!b.id.startsWith("bk_") && (
+                <button
+                  type="button"
+                  onClick={() => setChatId(b.id)}
+                  title="Chat con el cliente"
+                  aria-label="Chat con el cliente"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-teal transition hover:bg-accent"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                </button>
+              )}
               <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-            </button>
+            </div>
           ))}
 
           {filtered.length === 0 && (
@@ -453,6 +470,10 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
           <BookingDetail
             booking={active}
             readOnly={compact}
+            onChat={() => {
+              setChatId(active.id);
+              setModalId(null);
+            }}
             onApprove={() => {
               setStatus(active.id, "confirmed");
               notify(`Reserva de ${active.contact_name} aprobada.`);
@@ -466,6 +487,14 @@ export function BookingsPanel({ compact = false }: { compact?: boolean }) {
           />
         )}
       </Modal>
+
+      <Modal
+        open={!!chatBooking}
+        onClose={() => setChatId(null)}
+        title={chatBooking ? `Chat · ${chatBooking.contact_name}` : ""}
+      >
+        {chatBooking && <BookingChat booking={chatBooking} role="provider" />}
+      </Modal>
     </div>
   );
 }
@@ -475,11 +504,13 @@ function BookingDetail({
   readOnly,
   onApprove,
   onReject,
+  onChat,
 }: {
   booking: Booking;
   readOnly?: boolean;
   onApprove: () => void;
   onReject: () => void;
+  onChat?: () => void;
 }) {
   const row = (label: string, value: React.ReactNode) => (
     <div className="flex items-baseline justify-between gap-3 border-b border-border py-2 last:border-0">
@@ -487,7 +518,6 @@ function BookingDetail({
       <span className="text-right text-sm font-medium">{value}</span>
     </div>
   );
-  const [showChat, setShowChat] = useState(false);
   const ticketData: TicketData = {
     code: b.confirmation_code,
     confirmed: b.booking_status === "confirmed",
@@ -540,17 +570,11 @@ function BookingDetail({
         </Button>
       </div>
 
-      {/* Chat with the client (two-way; same thread the tourist sees) */}
-      {b.id && !b.id.startsWith("bk_") && (
-        <div className="border-t border-border pt-3">
-          {showChat ? (
-            <BookingChat booking={b} role="provider" />
-          ) : (
-            <Button variant="outline" className="w-full" onClick={() => setShowChat(true)}>
-              <MessageCircle className="h-4 w-4" /> Chat con el cliente
-            </Button>
-          )}
-        </div>
+      {/* Chat opens in its own modal (not stacked inside this one) */}
+      {onChat && b.id && !b.id.startsWith("bk_") && (
+        <Button variant="outline" className="w-full" onClick={onChat}>
+          <MessageCircle className="h-4 w-4" /> Chat con el cliente
+        </Button>
       )}
     </div>
   );
