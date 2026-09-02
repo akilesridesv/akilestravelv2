@@ -42,7 +42,7 @@ export function heuristicShelves(list: PublicExperience[]): Shelf[] {
     shelves.push({ title, ids });
   };
 
-  add("En cartelera", list.slice(0, 12));
+  add("Vive momentos que no vas a olvidar", list.slice(0, 12));
 
   // By category (catchy hook per known category, else the raw label).
   const byCat = new Map<string, PublicExperience[]>();
@@ -79,21 +79,21 @@ export function heuristicShelves(list: PublicExperience[]): Shelf[] {
 /** A friendlier marquee title for a known category. */
 function categoryHook(cat: string): string {
   const c = cat.toLowerCase();
-  if (/caf[eé]|finca/.test(c)) return "Sabores de café y fincas";
-  if (/playa|surf/.test(c)) return "Playas y olas de El Salvador";
-  if (/aventura|adrenalina/.test(c)) return "Aventura y adrenalina";
-  if (/volc[aá]n|sender/.test(c)) return "Volcanes y senderos";
-  if (/cultura|hist/.test(c)) return "Cultura e historia viva";
-  if (/pueblo/.test(c)) return "Pueblos mágicos por descubrir";
-  if (/gastro|comida/.test(c)) return "Para los amantes de la buena comida";
-  if (/city|ciudad/.test(c)) return "Descubre la ciudad";
-  if (/relax|bienestar/.test(c)) return "Desconéctate y relájate";
-  if (/acu[aá]tico/.test(c)) return "Aventuras sobre el agua";
-  if (/noct|noche/.test(c)) return "La noche es joven";
-  if (/foto|paisaje/.test(c)) return "Postales de El Salvador";
-  if (/familia/.test(c)) return "Planes en familia";
-  if (/arte|artesan/.test(c)) return "Arte y artesanías locales";
-  if (/vip|privad/.test(c)) return "Experiencias privadas y VIP";
+  if (/caf[eé]|finca/.test(c)) return "Sabores de café que enamoran";
+  if (/playa|surf/.test(c)) return "Siente el mar y las olas";
+  if (/aventura|adrenalina/.test(c)) return "Siente la adrenalina";
+  if (/volc[aá]n|sender/.test(c)) return "Conquista volcanes y senderos";
+  if (/cultura|hist/.test(c)) return "Enamórate de nuestra cultura";
+  if (/pueblo/.test(c)) return "Piérdete en los pueblos mágicos";
+  if (/gastro|comida/.test(c)) return "Déjate llevar por el sabor";
+  if (/city|ciudad/.test(c)) return "Vive la ciudad como local";
+  if (/relax|bienestar/.test(c)) return "Respira, desconéctate y relájate";
+  if (/acu[aá]tico/.test(c)) return "Diviértete sobre el agua";
+  if (/noct|noche/.test(c)) return "Vive la magia de la noche";
+  if (/foto|paisaje/.test(c)) return "Paisajes que te quitan el aliento";
+  if (/familia/.test(c)) return "Momentos para toda la familia";
+  if (/arte|artesan/.test(c)) return "Descubre el arte de nuestra gente";
+  if (/vip|privad/.test(c)) return "Consiéntete con una experiencia privada";
   return cat;
 }
 
@@ -108,19 +108,20 @@ export async function generateShelves(list: PublicExperience[]): Promise<Shelf[]
   if (!list.length) return fallback;
 
   const system = [
-    "Eres el curador de la 'cartelera' de Akiles Travel — experiencias turísticas en El Salvador.",
-    "Organiza el catálogo en FILAS temáticas estilo Netflix, cada una con un TÍTULO gancho en español.",
-    "Los títulos deben sonar a cartelera y despertar ganas, inspirados en las experiencias reales. Ejemplos de tono:",
-    "- 'Por si te gustó el tour en scooter'",
-    "- 'Aventuras al aire libre'",
-    "- 'Conoce la cultura de los pueblos mágicos'",
-    "- 'Por si te gustaron las playas de La Libertad y Surf City'",
-    "- 'Sabores de café en las alturas'",
+    "Eres el curador de la vitrina de descubrimiento de Akiles Travel — experiencias turísticas en El Salvador.",
+    "Organiza el catálogo en FILAS temáticas, cada una con un TÍTULO que EVOQUE EMOCIONES: cómo se quiere sentir el turista o qué va a vivir/descubrir. Escribe en segunda persona, cálido e inspirador.",
+    "NO uses palabras de marketing genéricas ni 'cartelera', 'catálogo', 'destacados', 'top'. Habla de sensaciones y experiencias. Ejemplos de tono:",
+    "- 'Siente la adrenalina al aire libre'",
+    "- 'Reconéctate con la naturaleza'",
+    "- 'Sabores de café que enamoran'",
+    "- 'Piérdete en la magia de nuestros pueblos'",
+    "- 'Atardeceres frente al mar en La Libertad'",
+    "- 'Si amaste rodar por la ciudad'",
     "Reglas:",
     "- Devuelve entre 2 y 6 filas (menos si hay pocas experiencias).",
     "- Cada fila: { title, ids } donde ids es un subconjunto del catálogo (mínimo 1).",
     "- Una experiencia PUEDE aparecer en varias filas. Entre todas las filas, incluye TODAS las experiencias.",
-    "- La primera fila puede ser un destacado general (ej. 'En cartelera' o 'Lo más querido').",
+    "- La primera fila puede ser un mensaje emocional que invite a explorar (ej. 'Vive momentos que no vas a olvidar').",
     "- Usa SOLO ids que existan en el catálogo. No inventes experiencias ni ids.",
     "- Títulos cortos (máx ~7 palabras), sin comillas.",
     "Devuelve EXCLUSIVAMENTE un JSON: { shelves: [{ title, ids }] }.",

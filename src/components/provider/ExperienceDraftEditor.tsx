@@ -336,8 +336,7 @@ export function ExperienceDraftEditor({
                 )}
               </select>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Agrupa tu experiencia en la cartelera y ayuda a los turistas (y al concierge de IA) a
-                encontrarte.
+                Agrupa tu experiencia y ayuda a los turistas (y al concierge de IA) a encontrarte.
               </p>
             </div>
 
