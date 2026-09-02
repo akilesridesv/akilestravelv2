@@ -5,7 +5,20 @@ import { useApp } from "@/state/store";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { notify } from "@/state/toast";
 import { cn } from "@/lib/utils";
-import { Send, MessageCircle, Loader2 } from "lucide-react";
+import { Send, MessageCircle, Loader2, Paperclip, FileText, Download } from "lucide-react";
+
+const ACCEPT =
+  "image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,application/pdf,application/msword," +
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
+  "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const MAX_BYTES = 15 * 1024 * 1024; // 15 MB
+
+function fmtSize(n?: number): string {
+  if (!n) return "";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 /**
  * Per-booking chat between the tourist and the provider. Messages persist in
@@ -25,8 +38,10 @@ export function BookingChat({
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [whatsapp, setWhatsapp] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -75,6 +90,26 @@ export function BookingChat({
     }
   }
 
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file || !user || uploading) return;
+    if (file.size > MAX_BYTES) {
+      notify("El archivo supera el límite de 15 MB.", "warning");
+      return;
+    }
+    setUploading(true);
+    try {
+      const att = await repo.uploadChatAttachment(booking.id, file);
+      const msg = await repo.sendBookingMessage(booking.id, user.id, role, "", att);
+      setMessages((m) => [...m, msg]);
+    } catch {
+      notify("No pude enviar el archivo. Intenta de nuevo.", "warning");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   if (!isSupabaseConfigured) {
     return <p className="text-sm text-muted-foreground">El chat está disponible con la cuenta en línea.</p>;
   }
@@ -111,7 +146,39 @@ export function BookingChat({
                       {m.sender_role === "provider" ? "Proveedor" : "Cliente"}
                     </p>
                   )}
-                  <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                  {m.attachment_url &&
+                    (m.attachment_type?.startsWith("image/") ? (
+                      <a href={m.attachment_url} target="_blank" rel="noreferrer" className="block">
+                        <img
+                          src={m.attachment_url}
+                          alt={m.attachment_name || "imagen"}
+                          className="max-h-48 w-auto rounded-lg"
+                        />
+                      </a>
+                    ) : (
+                      <a
+                        href={m.attachment_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        download={m.attachment_name}
+                        className={cn(
+                          "flex items-center gap-2 rounded-lg border px-2.5 py-2",
+                          mine ? "border-background/25" : "border-border bg-secondary/40"
+                        )}
+                      >
+                        <FileText className={cn("h-5 w-5 shrink-0", mine ? "" : "text-teal")} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-medium">
+                            {m.attachment_name || "Documento"}
+                          </span>
+                          <span className={cn("text-[10px]", mine ? "text-background/70" : "text-muted-foreground")}>
+                            {fmtSize(m.attachment_size)}
+                          </span>
+                        </span>
+                        <Download className="h-4 w-4 shrink-0 opacity-70" />
+                      </a>
+                    ))}
+                  {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
                 </div>
               </div>
             );
@@ -121,6 +188,16 @@ export function BookingChat({
       </div>
 
       <div className="mt-3 flex items-center gap-2">
+        <input ref={fileRef} type="file" accept={ACCEPT} onChange={onFile} className="hidden" />
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          aria-label="Adjuntar archivo"
+          title="Adjuntar imagen o documento"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition hover:bg-accent disabled:opacity-50"
+        >
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+        </button>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}

@@ -12,6 +12,7 @@ import type {
   TouristProfile,
 } from "@/types/domain";
 import { withProviderDefaults } from "@/types/domain";
+import { uid } from "@/lib/utils";
 
 // Data access against Supabase. Only called when the client is configured.
 function sb() {
@@ -752,10 +753,33 @@ function mapBookingMessage(r: any): BookingMessage {
     booking_id: r.booking_id,
     sender_user_id: r.sender_user_id,
     sender_role: r.sender_role,
-    body: r.body,
+    body: r.body ?? "",
     created_at: r.created_at,
     read_at: r.read_at ?? null,
+    attachment_url: r.attachment_url ?? undefined,
+    attachment_name: r.attachment_name ?? undefined,
+    attachment_type: r.attachment_type ?? undefined,
+    attachment_size: r.attachment_size != null ? Number(r.attachment_size) : undefined,
   };
+}
+
+export interface ChatAttachment {
+  url: string;
+  name: string;
+  type: string;
+  size: number;
+}
+
+/** Upload a chat file to Storage (random path scoped to the booking). */
+export async function uploadChatAttachment(bookingId: string, file: File): Promise<ChatAttachment> {
+  const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `${bookingId}/${uid("att")}.${ext}`;
+  const { error } = await sb()
+    .storage.from("chat-attachments")
+    .upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
+  if (error) throw error;
+  const url = sb().storage.from("chat-attachments").getPublicUrl(path).data.publicUrl;
+  return { url, name: file.name, type: file.type || "application/octet-stream", size: file.size };
 }
 
 export async function loadBookingMessages(bookingId: string): Promise<BookingMessage[]> {
@@ -772,11 +796,21 @@ export async function sendBookingMessage(
   bookingId: string,
   senderUserId: string,
   role: "tourist" | "provider",
-  body: string
+  body: string,
+  attachment?: ChatAttachment
 ): Promise<BookingMessage> {
   const { data, error } = await sb()
     .from("booking_messages")
-    .insert({ booking_id: bookingId, sender_user_id: senderUserId, sender_role: role, body })
+    .insert({
+      booking_id: bookingId,
+      sender_user_id: senderUserId,
+      sender_role: role,
+      body,
+      attachment_url: attachment?.url ?? null,
+      attachment_name: attachment?.name ?? null,
+      attachment_type: attachment?.type ?? null,
+      attachment_size: attachment?.size ?? null,
+    })
     .select()
     .single();
   if (error) throw error;

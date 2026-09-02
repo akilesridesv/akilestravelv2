@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Textarea, Label } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { ExperienceCard } from "@/components/tourist/ExperienceCard";
-import { Ticket, shareTicket, shareTicketPdf, type TicketData } from "@/components/tourist/Ticket";
+import { Ticket, type TicketData } from "@/components/tourist/Ticket";
 import { BookingChat } from "@/components/tourist/BookingChat";
 import { ConciergeChat } from "@/components/tourist/ConciergeChat";
 import { isLLMEnabled } from "@/ai/llm";
@@ -80,7 +80,9 @@ export default function TouristAccount() {
   const [bookings, setBookings] = useState<Booking[]>(storeBookings);
   const [requests, setRequests] = useState<ConciergeRequest[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [activeBooking, setActiveBooking] = useState<Booking | null>(null);
+  const [activeBooking, setActiveBooking] = useState<{ b: Booking; tab: "ticket" | "chat" } | null>(
+    null
+  );
 
   // Gate: only signed-in tourists. Providers/anon are redirected.
   useEffect(() => {
@@ -176,9 +178,7 @@ export default function TouristAccount() {
               upcoming={upcoming}
               notifications={notifications}
               onGo={setSection}
-              onOpenBooking={(b) => {
-                setActiveBooking(b);
-              }}
+              onOpen={(b, tab) => setActiveBooking({ b, tab })}
             />
           )}
           {section === "viajes" && (
@@ -196,7 +196,8 @@ export default function TouristAccount() {
 
       {activeBooking && (
         <BookingDetailModal
-          booking={activeBooking}
+          booking={activeBooking.b}
+          initialTab={activeBooking.tab}
           onClose={() => setActiveBooking(null)}
           onCancel={handleCancel}
         />
@@ -259,13 +260,13 @@ function Inicio({
   upcoming,
   notifications,
   onGo,
-  onOpenBooking,
+  onOpen,
 }: {
   firstName: string;
   upcoming: Booking[];
   notifications: AppNotification[];
   onGo: (s: SectionKey) => void;
-  onOpenBooking: (b: Booking) => void;
+  onOpen: (b: Booking, tab: "ticket" | "chat") => void;
 }) {
   const next = upcoming[0];
   return (
@@ -302,22 +303,32 @@ function Inicio({
           )}
         </div>
         {next ? (
-          <button
-            onClick={() => onOpenBooking(next)}
-            className="flex w-full items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left transition hover:shadow-sm"
-          >
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-ink">
-              <TicketIcon className="h-6 w-6" />
+          <div className="rounded-2xl border border-border bg-card p-4">
+            <button
+              onClick={() => onOpen(next, "ticket")}
+              className="flex w-full items-center gap-4 text-left"
+            >
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-ink">
+                <TicketIcon className="h-6 w-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{next.experience_title}</p>
+                <p className="text-sm text-muted-foreground">
+                  {fmtDate(next.scheduled_date)} · {next.scheduled_time}
+                </p>
+              </div>
+              <StatusPill status={next.booking_status} />
+              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+            </button>
+            <div className="mt-3 flex gap-2 border-t border-border pt-3">
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => onOpen(next, "ticket")}>
+                <TicketIcon className="h-4 w-4" /> Ver ticket
+              </Button>
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => onOpen(next, "chat")}>
+                <MessageCircle className="h-4 w-4" /> Chat con el proveedor
+              </Button>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">{next.experience_title}</p>
-              <p className="text-sm text-muted-foreground">
-                {fmtDate(next.scheduled_date)} · {next.scheduled_time}
-              </p>
-            </div>
-            <StatusPill status={next.booking_status} />
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-          </button>
+          </div>
         ) : (
           <EmptyState
             icon={<TicketIcon className="h-6 w-6" />}
@@ -568,14 +579,6 @@ function BookingDetailModal({
       {tab === "ticket" ? (
         <div className="space-y-4">
           <Ticket data={t} />
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => shareTicket(t)}>
-              Compartir
-            </Button>
-            <Button variant="outline" className="flex-1" onClick={() => shareTicketPdf(t)}>
-              PDF
-            </Button>
-          </div>
           {cancellable &&
             (confirmCancel ? (
               <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3">

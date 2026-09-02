@@ -279,4 +279,9 @@ export interface BookingMessage {
   body: string;
   created_at: string;
   read_at?: string | null;
+  // Optional file attachment (image or document) stored in Supabase Storage.
+  attachment_url?: string;
+  attachment_name?: string;
+  attachment_type?: string;
+  attachment_size?: number;
 }
