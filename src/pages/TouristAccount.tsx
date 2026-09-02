@@ -531,7 +531,29 @@ function BookingDetailModal({
   const [tab, setTab] = useState<"ticket" | "chat">(initialTab);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const cancellable = ["pending_approval", "pending", "confirmed"].includes(b.booking_status);
-  const t = bookingToTicket(b);
+
+  // Enrich the ticket with the experience's cover photo, meeting point and
+  // provider contacts so it matches the full Voyage-style design.
+  const [exp, setExp] = useState<import("@/data/repo").PublicExperience | null>(null);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let alive = true;
+    repo
+      .loadPublishedExperience(b.activity_id)
+      .then((e) => alive && setExp(e))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [b.activity_id]);
+
+  const t: TicketData = {
+    ...bookingToTicket(b),
+    coverImage: exp?.featured_image,
+    meetingPoint: exp?.location_address,
+    whatsapp: exp?.provider?.whatsapp,
+    contactEmail: exp?.provider?.contact_email,
+  };
   return (
     <Modal open onClose={onClose} title={b.experience_title}>
       <div className="mb-4 flex gap-1.5">
