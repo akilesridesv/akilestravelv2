@@ -375,40 +375,109 @@ function Viajes({
   onCancel: (b: Booking) => void;
   onChanged: () => void;
 }) {
-  const [open, setOpen] = useState<Booking | null>(null);
+  const [open, setOpen] = useState<{ b: Booking; tab: "ticket" | "chat" } | null>(null);
+  const [tab, setTab] = useState<"proximos" | "historial" | "chat">("proximos");
+  const all = useMemo(() => [...upcoming, ...past], [upcoming, past]);
+
+  const tabs: { key: typeof tab; label: string; icon: React.ElementType; count: number }[] = [
+    { key: "proximos", label: "Próximos", icon: TicketIcon, count: upcoming.length },
+    { key: "historial", label: "Historial", icon: Home, count: past.length },
+    { key: "chat", label: "Mensajes", icon: MessageCircle, count: all.length },
+  ];
+
   return (
     <div className="space-y-6">
       <h1 className="font-display text-3xl tracking-tight">Mis viajes</h1>
 
-      <section>
-        <h2 className="mb-3 font-display text-lg text-muted-foreground">Próximos</h2>
-        {upcoming.length ? (
+      <div className="flex gap-1.5">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition",
+              tab === t.key ? "bg-ink text-background" : "border border-border text-muted-foreground hover:bg-accent"
+            )}
+          >
+            <t.icon className="h-4 w-4" /> {t.label}
+            {t.count > 0 && (
+              <span className={cn("rounded-full px-1.5 text-xs", tab === t.key ? "bg-background/20" : "bg-secondary")}>
+                {t.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === "proximos" &&
+        (upcoming.length ? (
           <div className="grid gap-3">
             {upcoming.map((b) => (
-              <BookingRow key={b.id} b={b} onOpen={() => setOpen(b)} />
+              <BookingRow key={b.id} b={b} onOpen={() => setOpen({ b, tab: "ticket" })} />
             ))}
           </div>
         ) : (
-          <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            No tienes viajes próximos.
-          </p>
-        )}
-      </section>
+          <EmptyState
+            icon={<TicketIcon className="h-6 w-6" />}
+            title="No tienes viajes próximos"
+            body="Explora experiencias y reserva tu próxima aventura."
+            cta={<Link to="/" className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-background">Explorar</Link>}
+          />
+        ))}
 
-      {past.length > 0 && (
-        <section>
-          <h2 className="mb-3 font-display text-lg text-muted-foreground">Historial</h2>
+      {tab === "historial" &&
+        (past.length ? (
           <div className="grid gap-3">
             {past.map((b) => (
-              <BookingRow key={b.id} b={b} onOpen={() => setOpen(b)} muted />
+              <BookingRow key={b.id} b={b} onOpen={() => setOpen({ b, tab: "ticket" })} muted />
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <EmptyState
+            icon={<Home className="h-6 w-6" />}
+            title="Aún sin historial"
+            body="Tus experiencias pasadas aparecerán aquí para que las recuerdes o repitas."
+          />
+        ))}
+
+      {tab === "chat" &&
+        (all.length ? (
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Conversa con el proveedor sobre cualquiera de tus reservas.
+            </p>
+            {all.map((b) => (
+              <button
+                key={b.id}
+                onClick={() => setOpen({ b, tab: "chat" })}
+                className="flex w-full items-center gap-4 rounded-2xl border border-border bg-card p-4 text-left transition hover:shadow-sm"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal/15 text-teal">
+                  <MessageCircle className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{b.experience_title}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {fmtDate(b.scheduled_date)} · {b.scheduled_time}
+                  </p>
+                </div>
+                <StatusPill status={b.booking_status} />
+                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon={<MessageCircle className="h-6 w-6" />}
+            title="Sin conversaciones"
+            body="Cuando reserves, aquí podrás chatear con el proveedor sobre tu experiencia."
+          />
+        ))}
 
       {open && (
         <BookingDetailModal
-          booking={open}
+          booking={open.b}
+          initialTab={open.tab}
           onClose={() => setOpen(null)}
           onCancel={(b) => {
             onCancel(b);
@@ -452,12 +521,14 @@ function BookingDetailModal({
   booking: b,
   onClose,
   onCancel,
+  initialTab = "ticket",
 }: {
   booking: Booking;
   onClose: () => void;
   onCancel: (b: Booking) => void;
+  initialTab?: "ticket" | "chat";
 }) {
-  const [tab, setTab] = useState<"ticket" | "chat">("ticket");
+  const [tab, setTab] = useState<"ticket" | "chat">(initialTab);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const cancellable = ["pending_approval", "pending", "confirmed"].includes(b.booking_status);
   const t = bookingToTicket(b);
