@@ -289,17 +289,16 @@ export default function TouristHome() {
 
       {/* Hero + concierge, over an El Salvador destination backdrop */}
       <div className="relative isolate overflow-hidden">
-        {/* Sharp destination photo (San Salvador Volcano crater), faded into the
-            page; text/controls get their own scrims so they stay legible. */}
+        {/* Adventure photo (surfer at sunset, El Salvador / Surf City), faded
+            into the page; text/controls get their own scrims so they stay legible. */}
         <div aria-hidden className="pointer-events-none absolute inset-0">
           <img
             src="/hero-elsalvador.jpg"
             alt=""
             className="h-full w-full object-cover"
           />
-          {/* Sharp photo — a soft scrim keeps the headline/controls legible and
-              the bottom fades cleanly into the page. */}
-          <div className="absolute inset-0 bg-gradient-to-b from-background/35 via-background/40 to-background" />
+          {/* Light scrim so the photo shows well; the bottom fades into the page. */}
+          <div className="absolute inset-0 bg-gradient-to-b from-background/15 via-background/30 to-background" />
         </div>
       <section className="relative z-10 mx-auto max-w-3xl px-5 pt-14 pb-8 text-center sm:px-8 sm:pt-20">
         <p className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-3 py-1 text-xs font-medium text-foreground/80 backdrop-blur-sm">
