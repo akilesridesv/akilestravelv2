@@ -249,10 +249,10 @@ export default function TouristHome() {
     <div className="min-h-dvh bg-background">
       <TouristHeader />
 
-      {/* Hero + concierge, over a blurred El Salvador backdrop */}
+      {/* Hero + concierge, over an El Salvador destination backdrop */}
       <div className="relative isolate overflow-hidden">
-        {/* Distorted destination photo (San Salvador Volcano crater), faded into
-            the page so it never competes with the text/controls above it. */}
+        {/* Sharp destination photo (San Salvador Volcano crater), faded into the
+            page; text/controls get their own scrims so they stay legible. */}
         <div aria-hidden className="pointer-events-none absolute inset-0">
           <img
             src="/hero-elsalvador.jpg"
@@ -264,13 +264,13 @@ export default function TouristHome() {
           <div className="absolute inset-0 bg-gradient-to-b from-background/35 via-background/40 to-background" />
         </div>
       <section className="relative z-10 mx-auto max-w-3xl px-5 pt-14 pb-8 text-center sm:px-8 sm:pt-20">
-        <p className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
+        <p className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/70 px-3 py-1 text-xs font-medium text-foreground/80 backdrop-blur-sm">
           <Sparkles className="h-3.5 w-3.5 text-primary" /> Descubre con tu concierge de IA
         </p>
-        <h1 className="font-display text-4xl leading-[1.05] tracking-tight sm:text-6xl">
+        <h1 className="font-display text-4xl leading-[1.05] tracking-tight text-foreground [text-shadow:0_1px_16px_rgba(255,255,255,0.55)] sm:text-6xl">
           Vive El Salvador.
         </h1>
-        <p className="mx-auto mt-4 max-w-lg text-lg text-muted-foreground">
+        <p className="mx-auto mt-4 max-w-lg text-lg font-medium text-foreground/90 [text-shadow:0_1px_10px_rgba(255,255,255,0.7)]">
           Experiencias curadas y verificadas. Dinos qué buscas y reserva en minutos.
         </p>
 
@@ -439,7 +439,7 @@ export default function TouristHome() {
             </div>
           )}
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs font-medium text-foreground/80 [text-shadow:0_1px_10px_rgba(255,255,255,0.75)]">
             Pregúntale al concierge en tus palabras — o toca <b>+</b> para filtros y más.
           </p>
         </div>
@@ -449,7 +449,7 @@ export default function TouristHome() {
             <button
               key={q}
               onClick={() => setQuery(q === "Menos de $30" ? "menos de 30" : q)}
-              className="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:bg-accent"
+              className="rounded-full border border-border bg-background/80 px-3 py-1.5 text-sm font-medium text-foreground/80 shadow-sm backdrop-blur-sm transition hover:bg-accent"
             >
               {q}
             </button>
