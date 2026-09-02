@@ -73,6 +73,7 @@ export default function TouristAccount() {
   const authReady = useApp((s) => s.authReady);
   const user = useApp((s) => s.user);
   const role = useApp((s) => s.role);
+  const isAdmin = useApp((s) => s.isAdmin);
   const profile = useApp((s) => s.touristProfile);
   const storeBookings = useApp((s) => s.bookings);
 
@@ -128,6 +129,14 @@ export default function TouristAccount() {
             </span>
           </Link>
           <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className="rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-background transition hover:opacity-90"
+              >
+                Admin
+              </Link>
+            )}
             <button
               onClick={() => setSection("inicio")}
               className="relative rounded-full p-2 text-muted-foreground transition hover:bg-accent"

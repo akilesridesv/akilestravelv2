@@ -25,6 +25,7 @@ interface AppState {
   // auth
   user: LocalUser | null;
   role: UserRole | null; // which surface the signed-in user belongs to
+  isAdmin: boolean; // Akiles staff (email allowlist)
   provider: ProviderProfile | null;
   touristProfile: TouristProfile | null;
   authReady: boolean; // false while restoring a Supabase session
@@ -46,6 +47,7 @@ interface AppState {
   ) => void;
   setTouristSession: (user: LocalUser, profile: TouristProfile, bookings: Booking[]) => void;
   setTouristProfile: (patch: Partial<TouristProfile>) => void;
+  setIsAdmin: (v: boolean) => void;
   setAuthReady: () => void;
 
   // provider actions
@@ -119,6 +121,7 @@ export const useApp = create<AppState>()(
     (set, get) => ({
       user: null,
       role: null,
+      isAdmin: false,
       provider: null,
       touristProfile: null,
       authReady: !remote, // local mode is ready immediately
@@ -141,6 +144,7 @@ export const useApp = create<AppState>()(
         set({
           user: null,
           role: null,
+          isAdmin: false,
           provider: null,
           touristProfile: null,
           experiences: [],
@@ -156,6 +160,8 @@ export const useApp = create<AppState>()(
 
       setTouristProfile: (patch) =>
         set((s) => (s.touristProfile ? { touristProfile: { ...s.touristProfile, ...patch } } : {})),
+
+      setIsAdmin: (v) => set({ isAdmin: v }),
 
       setAuthReady: () => set({ authReady: true }),
 

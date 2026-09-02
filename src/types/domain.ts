@@ -71,6 +71,11 @@ export interface ProviderProfile {
   verification_status: VerificationStatus;
   booking_mode: BookingMode;
   created_at: string;
+  // Per-provider fee overrides (null/undefined => global default). Set by admin.
+  tourist_fee_type?: "percent" | "fixed" | null;
+  tourist_fee_value?: number | null;
+  commission_type?: "percent" | "fixed" | null;
+  commission_value?: number | null;
 }
 
 /** Fill in defaults so older/remote records without the new fields never break. */
@@ -198,6 +203,11 @@ export interface Booking {
   subtotal_paid: number;
   service_fee_paid: number;
   total_paid: number;
+  platform_commission?: number; // retained from the provider
+  provider_payout?: number; // net paid to the provider
+  payout_id?: string | null; // set once included in a provider payout
+  user_id?: string | null; // the tourist account, when booked signed in
+  activity_id_ref?: string; // (reserved)
   created_at: string;
 }
 

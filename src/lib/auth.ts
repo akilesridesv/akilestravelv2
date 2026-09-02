@@ -11,6 +11,7 @@ import {
   loadFavorites,
   addFavorite,
   removeFavorite,
+  isAdminUser,
 } from "@/data/repo";
 import { getFavorites, setFavorites, setFavoritesSync } from "@/lib/favorites";
 
@@ -29,10 +30,18 @@ function sessionUser(u: { id: string; email?: string; user_metadata?: any }): Lo
 
 /** Load a PROVIDER's profile + data into the store (creates the profile if
  *  missing — only used on provider sign-up/sign-in). */
+/** Refresh the admin flag (email allowlist) into the store. */
+function refreshAdminFlag(): void {
+  isAdminUser()
+    .then((v) => useApp.getState().setIsAdmin(v))
+    .catch(() => {});
+}
+
 export async function bootstrapProvider(user: LocalUser): Promise<void> {
   const provider = await ensureProviderProfile(user.id, user.name);
   const [experiences, bookings] = await Promise.all([loadExperiences(user.id), loadBookings()]);
   useApp.getState().setSession(user, provider, experiences, bookings);
+  refreshAdminFlag();
 }
 
 /** Load a TOURIST's account (profile + their own bookings) into the store, and
@@ -41,6 +50,7 @@ export async function bootstrapTourist(user: LocalUser): Promise<void> {
   const profile = await ensureTouristProfile(user.id, user.name, user.email);
   const bookings = await loadMyBookings();
   useApp.getState().setTouristSession(user, profile, bookings);
+  refreshAdminFlag();
   try {
     const remote = await loadFavorites();
     const local = getFavorites();
@@ -63,6 +73,7 @@ export async function bootstrapByRole(user: LocalUser): Promise<void> {
   if (provider) {
     const [experiences, bookings] = await Promise.all([loadExperiences(user.id), loadBookings()]);
     useApp.getState().setSession(user, provider, experiences, bookings);
+    refreshAdminFlag();
   } else {
     await bootstrapTourist(user);
   }

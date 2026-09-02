@@ -39,6 +39,7 @@ export default function ProviderDashboard() {
   const navigate = useNavigate();
   const user = useApp((s) => s.user);
   const provider = useApp((s) => s.provider);
+  const isAdmin = useApp((s) => s.isAdmin);
   const authReady = useApp((s) => s.authReady);
   const isDesktop = useIsDesktop();
   const [activePanel, setActivePanel] = useState<Panel>("experiences");
@@ -122,12 +123,23 @@ export default function ProviderDashboard() {
             </div>
           </div>
         </button>
+        {isAdmin && (
+          <button
+            onClick={() => navigate("/admin")}
+            className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-full bg-ink px-3 text-xs font-semibold text-background transition hover:opacity-90"
+          >
+            Admin
+          </button>
+        )}
         <button
           onClick={async () => {
             await authSignOut();
             navigate("/");
           }}
-          className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground hover:bg-accent"
+          className={cn(
+            "inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground hover:bg-accent",
+            !isAdmin && "ml-auto"
+          )}
         >
           <LogOut className="h-4 w-4" /> <span className="hidden sm:inline">Salir</span>
         </button>

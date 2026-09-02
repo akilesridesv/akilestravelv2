@@ -13,6 +13,7 @@ import type {
 } from "@/types/domain";
 import { withProviderDefaults } from "@/types/domain";
 import { uid } from "@/lib/utils";
+import { type FeeDefaults, FALLBACK_FEE_DEFAULTS } from "@/lib/fees";
 
 // Data access against Supabase. Only called when the client is configured.
 function sb() {
@@ -41,6 +42,10 @@ function mapProvider(r: any): ProviderProfile {
     verification_status: r.verification_status,
     booking_mode: r.booking_mode,
     created_at: r.created_at,
+    tourist_fee_type: r.tourist_fee_type ?? null,
+    tourist_fee_value: r.tourist_fee_value ?? null,
+    commission_type: r.commission_type ?? null,
+    commission_value: r.commission_value ?? null,
   });
 }
 
@@ -392,6 +397,8 @@ export interface NewBooking {
   subtotal: number;
   service_fee: number;
   total: number;
+  platform_commission?: number; // retained from the provider
+  provider_payout?: number; // paid to the provider (subtotal - commission)
   status: Booking["booking_status"];
   confirmation_code: string;
 }
@@ -433,6 +440,8 @@ export async function createBooking(b: NewBooking): Promise<void> {
     subtotal_paid: b.subtotal,
     service_fee_paid: b.service_fee,
     total_paid: b.total,
+    platform_commission: b.platform_commission ?? 0,
+    provider_payout: b.provider_payout ?? b.subtotal,
   });
   if (error) throw error;
 }
@@ -456,6 +465,10 @@ function mapBooking(r: any): Booking {
     subtotal_paid: Number(r.subtotal_paid) || 0,
     service_fee_paid: Number(r.service_fee_paid) || 0,
     total_paid: Number(r.total_paid) || 0,
+    platform_commission: r.platform_commission != null ? Number(r.platform_commission) : undefined,
+    provider_payout: r.provider_payout != null ? Number(r.provider_payout) : undefined,
+    payout_id: r.payout_id ?? null,
+    user_id: r.user_id ?? null,
     created_at: r.created_at,
   };
 }
@@ -790,6 +803,164 @@ export async function loadBookingMessages(bookingId: string): Promise<BookingMes
     .order("created_at", { ascending: true });
   if (error) throw error;
   return (data ?? []).map(mapBookingMessage);
+}
+
+// --- fees + admin ------------------------------------------------------------
+
+/** Global default fees (public read, used at checkout when a provider has none). */
+export async function loadFeeDefaults(): Promise<FeeDefaults> {
+  const { data } = await sb().from("fee_defaults").select("*").eq("id", 1).maybeSingle();
+  return data
+    ? {
+        tourist_fee_type: data.tourist_fee_type,
+        tourist_fee_value: Number(data.tourist_fee_value),
+        commission_type: data.commission_type,
+        commission_value: Number(data.commission_value),
+      }
+    : FALLBACK_FEE_DEFAULTS;
+}
+
+/** Is the signed-in user an Akiles admin? (email allowlist via is_admin()). */
+export async function isAdminUser(): Promise<boolean> {
+  const { data, error } = await sb().rpc("is_admin");
+  if (error) return false;
+  return data === true;
+}
+
+export interface PlatformSettings {
+  monthly_cost: number;
+  currency: string;
+}
+
+export async function loadPlatformSettings(): Promise<PlatformSettings> {
+  const { data } = await sb().from("platform_settings").select("*").eq("id", 1).maybeSingle();
+  return { monthly_cost: Number(data?.monthly_cost ?? 0), currency: data?.currency ?? "USD" };
+}
+
+export async function savePlatformSettings(s: PlatformSettings): Promise<void> {
+  const { error } = await sb()
+    .from("platform_settings")
+    .update({ monthly_cost: s.monthly_cost, currency: s.currency, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+  if (error) throw error;
+}
+
+export async function saveFeeDefaults(d: FeeDefaults): Promise<void> {
+  const { error } = await sb()
+    .from("fee_defaults")
+    .update({ ...d, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+  if (error) throw error;
+}
+
+// Admin-wide reads (RLS: is_admin()).
+export async function adminLoadProviders(): Promise<ProviderProfile[]> {
+  const { data, error } = await sb().from("provider_profiles").select("*").order("created_at");
+  if (error) throw error;
+  return (data ?? []).map(mapProvider);
+}
+
+export async function adminLoadTourists(): Promise<TouristProfile[]> {
+  const { data, error } = await sb().from("profiles").select("*").order("created_at");
+  if (error) throw error;
+  return (data ?? []).map(mapTouristProfile);
+}
+
+export async function adminLoadBookings(): Promise<Booking[]> {
+  const { data, error } = await sb()
+    .from("bookings")
+    .select("*, activities(title, provider_profile_id)")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ ...mapBooking(r), activity_id_ref: r.activities?.provider_profile_id }));
+}
+
+export async function adminLoadRequests(): Promise<ConciergeRequest[]> {
+  const { data, error } = await sb()
+    .from("concierge_requests")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapRequest);
+}
+
+export async function adminSetRequestStatus(id: string, status: string): Promise<void> {
+  const { error } = await sb()
+    .from("concierge_requests")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function adminSetProviderFees(
+  providerId: string,
+  fees: Partial<Pick<ProviderProfile, "tourist_fee_type" | "tourist_fee_value" | "commission_type" | "commission_value">>
+): Promise<void> {
+  const { error } = await sb().from("provider_profiles").update(fees).eq("id", providerId);
+  if (error) throw error;
+}
+
+export async function adminSetProviderVerification(providerId: string, status: string): Promise<void> {
+  const { error } = await sb().from("provider_profiles").update({ verification_status: status }).eq("id", providerId);
+  if (error) throw error;
+}
+
+export async function adminSetExperienceStatus(
+  activityId: string,
+  patch: { publication_status?: string; is_active?: boolean }
+): Promise<void> {
+  const { error } = await sb().from("activities").update(patch).eq("id", activityId);
+  if (error) throw error;
+}
+
+export interface Payout {
+  id: string;
+  provider_profile_id: string;
+  amount: number;
+  booking_ids: string[];
+  status: string;
+  method?: string;
+  note?: string;
+  created_at: string;
+}
+
+export async function adminCreatePayout(input: {
+  provider_profile_id: string;
+  amount: number;
+  booking_ids: string[];
+  method?: string;
+  note?: string;
+}): Promise<Payout> {
+  const { data, error } = await sb().from("payouts").insert(input).select().single();
+  if (error) throw error;
+  // Mark the covered bookings as paid out.
+  if (input.booking_ids.length)
+    await sb().from("bookings").update({ payout_id: data.id }).in("id", input.booking_ids);
+  return {
+    id: data.id,
+    provider_profile_id: data.provider_profile_id,
+    amount: Number(data.amount),
+    booking_ids: data.booking_ids ?? [],
+    status: data.status,
+    method: data.method ?? undefined,
+    note: data.note ?? undefined,
+    created_at: data.created_at,
+  };
+}
+
+export async function adminLoadPayouts(): Promise<Payout[]> {
+  const { data, error } = await sb().from("payouts").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((d) => ({
+    id: d.id,
+    provider_profile_id: d.provider_profile_id,
+    amount: Number(d.amount),
+    booking_ids: d.booking_ids ?? [],
+    status: d.status,
+    method: d.method ?? undefined,
+    note: d.note ?? undefined,
+    created_at: d.created_at,
+  }));
 }
 
 export async function sendBookingMessage(

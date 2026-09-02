@@ -13,6 +13,7 @@ import * as repo from "@/data/repo";
 import type { Passenger } from "@/data/repo";
 import { notify } from "@/state/toast";
 import { formatUSD, parseISODate, dayName, monthName, uid, cn } from "@/lib/utils";
+import { resolveFees, computeFees, FALLBACK_FEE_DEFAULTS, type FeeDefaults } from "@/lib/fees";
 import {
   Check,
   ChevronLeft,
@@ -34,7 +35,6 @@ import {
 } from "lucide-react";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const SERVICE_FEE = 0.1;
 
 // Demo promo codes (no real payment in this version).
 const PROMOS: Record<string, { kind: "pct" | "flat"; value: number; label: string }> = {
@@ -85,6 +85,15 @@ export function BookingSheet({
   // Link the booking to the tourist's account when they're signed in.
   const touristUserId = useApp((s) => (s.role === "tourist" ? s.user?.id : undefined));
   const touristProfile = useApp((s) => s.touristProfile);
+  const [feeDefaults, setFeeDefaults] = useState<FeeDefaults>(FALLBACK_FEE_DEFAULTS);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let alive = true;
+    repo.loadFeeDefaults().then((d) => alive && setFeeDefaults(d)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   const deps = useMemo(() => bookableDepartures(experience), [experience]);
   const dates = useMemo(() => bookableDates(deps), [deps]);
 
@@ -184,8 +193,18 @@ export function BookingSheet({
   const unit = tier ? tier.price : experience.price_per_person;
   const subtotal = round2(unit * people);
   const discount = promo ? Math.min(promo.discount, subtotal) : 0;
-  const fee = round2((subtotal - discount) * SERVICE_FEE);
-  const total = round2(subtotal - discount + fee);
+  // Tourist service fee comes from the provider's config (or the global
+  // default). It's ADDED on top of the price at checkout.
+  const resolvedFees = useMemo(() => resolveFees(experience.provider, feeDefaults), [
+    experience.provider,
+    feeDefaults,
+  ]);
+  const breakdown = useMemo(
+    () => computeFees(round2(subtotal - discount), resolvedFees),
+    [subtotal, discount, resolvedFees]
+  );
+  const fee = breakdown.touristFee;
+  const total = breakdown.total;
   const instant = experience.provider?.booking_mode === "instant";
 
   const contact = passengers[0];
@@ -254,9 +273,11 @@ export function BookingSheet({
           promo_code: promo?.code,
           scheduled_date: date,
           scheduled_time: time,
-          subtotal,
+          subtotal: breakdown.base,
           service_fee: fee,
           total,
+          platform_commission: breakdown.commission,
+          provider_payout: breakdown.payout,
           status,
           confirmation_code: cc,
         });
@@ -444,11 +465,15 @@ export function BookingSheet({
               {/* Price preview */}
               <div className="rounded-2xl bg-secondary/60 p-4 text-sm">
                 <Row label={`${formatUSD(unit)} × ${people}`} value={formatUSD(subtotal)} />
-                <Row label="Tarifa de servicio (10%)" value={formatUSD(round2(subtotal * SERVICE_FEE))} />
+                <Row label={`Cargo por servicio (${breakdown.touristFeeLabel})`} value={formatUSD(fee)} />
                 <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
                   <span className="font-medium">Total estimado</span>
-                  <span className="font-display text-lg">{formatUSD(round2(subtotal + subtotal * SERVICE_FEE))}</span>
+                  <span className="font-display text-lg">{formatUSD(total)}</span>
                 </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                  El cargo por servicio cubre los gastos administrativos de la plataforma y la emisión de
+                  tu ticket. El precio de la experiencia lo define el proveedor.
+                </p>
               </div>
 
               <Button size="lg" className="w-full" disabled={!canBook} onClick={() => setStep("details")}>
@@ -564,11 +589,16 @@ export function BookingSheet({
               <div className="rounded-2xl bg-secondary/60 p-4 text-sm">
                 <Row label={`${formatUSD(unit)} × ${people}`} value={formatUSD(subtotal)} />
                 {discount > 0 && <Row label={`Descuento (${promo?.code})`} value={`− ${formatUSD(discount)}`} />}
-                <Row label="Tarifa de servicio (10%)" value={formatUSD(fee)} />
+                <Row label={`Cargo por servicio (${breakdown.touristFeeLabel})`} value={formatUSD(fee)} />
                 <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
-                  <span className="font-medium">Total</span>
+                  <span className="font-medium">Total a pagar</span>
                   <span className="font-display text-lg">{formatUSD(total)}</span>
                 </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                  El precio de la experiencia ({formatUSD(round2(subtotal - discount))}) lo define el
+                  proveedor. El <b>cargo por servicio</b> ({breakdown.touristFeeLabel}) cubre los gastos
+                  administrativos de la plataforma y la emisión del ticket.
+                </p>
               </div>
 
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
