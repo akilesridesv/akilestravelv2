@@ -46,6 +46,7 @@ function mapProvider(r: any): ProviderProfile {
     tourist_fee_value: r.tourist_fee_value ?? null,
     commission_type: r.commission_type ?? null,
     commission_value: r.commission_value ?? null,
+    bank_account: r.bank_account ?? null,
   });
 }
 
@@ -918,40 +919,19 @@ export interface Payout {
   provider_profile_id: string;
   amount: number;
   booking_ids: string[];
-  status: string;
+  status: string; // 'paid' | 'reverted'
   method?: string;
   note?: string;
+  bank_name?: string;
+  account_number?: string;
+  account_type?: string;
+  holder_name?: string;
+  transfer_ref?: string;
   created_at: string;
 }
 
-export async function adminCreatePayout(input: {
-  provider_profile_id: string;
-  amount: number;
-  booking_ids: string[];
-  method?: string;
-  note?: string;
-}): Promise<Payout> {
-  const { data, error } = await sb().from("payouts").insert(input).select().single();
-  if (error) throw error;
-  // Mark the covered bookings as paid out.
-  if (input.booking_ids.length)
-    await sb().from("bookings").update({ payout_id: data.id }).in("id", input.booking_ids);
+function mapPayout(d: any): Payout {
   return {
-    id: data.id,
-    provider_profile_id: data.provider_profile_id,
-    amount: Number(data.amount),
-    booking_ids: data.booking_ids ?? [],
-    status: data.status,
-    method: data.method ?? undefined,
-    note: data.note ?? undefined,
-    created_at: data.created_at,
-  };
-}
-
-export async function adminLoadPayouts(): Promise<Payout[]> {
-  const { data, error } = await sb().from("payouts").select("*").order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data ?? []).map((d) => ({
     id: d.id,
     provider_profile_id: d.provider_profile_id,
     amount: Number(d.amount),
@@ -959,8 +939,54 @@ export async function adminLoadPayouts(): Promise<Payout[]> {
     status: d.status,
     method: d.method ?? undefined,
     note: d.note ?? undefined,
+    bank_name: d.bank_name ?? undefined,
+    account_number: d.account_number ?? undefined,
+    account_type: d.account_type ?? undefined,
+    holder_name: d.holder_name ?? undefined,
+    transfer_ref: d.transfer_ref ?? undefined,
     created_at: d.created_at,
-  }));
+  };
+}
+
+/** Save (or update) a provider's bank account for reuse in future payouts. */
+export async function adminSetProviderBank(
+  providerId: string,
+  bank: ProviderProfile["bank_account"]
+): Promise<void> {
+  const { error } = await sb().from("provider_profiles").update({ bank_account: bank }).eq("id", providerId);
+  if (error) throw error;
+}
+
+export async function adminCreatePayout(input: {
+  provider_profile_id: string;
+  amount: number;
+  booking_ids: string[];
+  bank_name?: string;
+  account_number?: string;
+  account_type?: string;
+  holder_name?: string;
+  transfer_ref?: string;
+  note?: string;
+}): Promise<Payout> {
+  const { data, error } = await sb().from("payouts").insert({ ...input, status: "paid" }).select().single();
+  if (error) throw error;
+  if (input.booking_ids.length)
+    await sb().from("bookings").update({ payout_id: data.id }).in("id", input.booking_ids);
+  return mapPayout(data);
+}
+
+/** Revert a payout: mark it reverted and reopen its bookings as unpaid. */
+export async function adminRevertPayout(payout: Payout): Promise<void> {
+  const { error } = await sb().from("payouts").update({ status: "reverted" }).eq("id", payout.id);
+  if (error) throw error;
+  if (payout.booking_ids.length)
+    await sb().from("bookings").update({ payout_id: null }).in("id", payout.booking_ids);
+}
+
+export async function adminLoadPayouts(): Promise<Payout[]> {
+  const { data, error } = await sb().from("payouts").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapPayout);
 }
 
 export async function sendBookingMessage(

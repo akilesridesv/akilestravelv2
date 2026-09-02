@@ -6,6 +6,7 @@ import { authSignOut } from "@/lib/auth";
 import * as repo from "@/data/repo";
 import type { Booking, ConciergeRequest, ProviderProfile, TouristProfile } from "@/types/domain";
 import { resolveFees, type FeeDefaults, type FeeType } from "@/lib/fees";
+import { EL_SALVADOR_BANKS, type BankAccountType } from "@/lib/banks";
 import { Logo } from "@/components/ui/Logo";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -688,14 +689,15 @@ function Facturacion({
     return { p, own, unpaid, retained, toPay };
   });
 
-  async function pay(providerId: string, bookingIds: string[], amount: number) {
-    if (!bookingIds.length) return;
+  const [payProvider, setPayProvider] = useState<{ p: ProviderProfile; unpaid: Booking[] } | null>(null);
+
+  async function revert(po: repo.Payout) {
     try {
-      await repo.adminCreatePayout({ provider_profile_id: providerId, amount, booking_ids: bookingIds });
-      notify(`Pago registrado: ${formatUSD(amount)}.`);
+      await repo.adminRevertPayout(po);
+      notify("Pago revertido. Las reservas volvieron a pendientes.");
       onChanged();
     } catch {
-      notify("No pude registrar el pago.", "warning");
+      notify("No pude revertir el pago.", "warning");
     }
   }
 
@@ -704,7 +706,8 @@ function Facturacion({
       <h1 className="font-display text-3xl tracking-tight">Facturación</h1>
       <p className="text-sm text-muted-foreground">
         Por proveedor: <b>retenido</b> = comisión que gana Akiles · <b>a pagar</b> = neto pendiente de
-        transferir al proveedor. Registrar el pago marca esas reservas como pagadas.
+        transferir al proveedor. Al registrar un pago eliges las reservas a cubrir y guardas los datos del
+        depósito.
       </p>
       <div className="grid gap-2">
         {rows.map(({ p, unpaid, retained, toPay }) => (
@@ -717,11 +720,7 @@ function Facturacion({
                   pendientes
                 </p>
               </div>
-              <Button
-                size="sm"
-                disabled={!unpaid.length}
-                onClick={() => pay(p.id, unpaid.map((b) => b.id), toPay)}
-              >
+              <Button size="sm" disabled={!unpaid.length} onClick={() => setPayProvider({ p, unpaid })}>
                 <Wallet className="h-4 w-4" /> Registrar pago
               </Button>
             </div>
@@ -734,19 +733,218 @@ function Facturacion({
         <section>
           <h2 className="mb-2 font-display text-lg">Pagos registrados</h2>
           <div className="grid gap-2">
-            {payouts.map((po) => (
-              <div key={po.id} className="flex items-center justify-between rounded-xl border border-border bg-card p-3 text-sm">
-                <span>
-                  {providers.find((p) => p.id === po.provider_profile_id)?.business_name ?? "Proveedor"} ·{" "}
-                  {po.created_at.slice(0, 10)}
-                </span>
-                <span className="font-medium">{formatUSD(po.amount)}</span>
-              </div>
-            ))}
+            {payouts.map((po) => {
+              const reverted = po.status === "reverted";
+              return (
+                <div key={po.id} className="rounded-xl border border-border bg-card p-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium">
+                        {providers.find((p) => p.id === po.provider_profile_id)?.business_name ?? "Proveedor"}{" "}
+                        · {po.created_at.slice(0, 10)}
+                        {reverted && <span className="ml-2 text-destructive">(revertido)</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {po.booking_ids.length} reserva(s)
+                        {po.bank_name ? ` · ${po.bank_name}` : ""}
+                        {po.account_number ? ` · cta ${po.account_number}` : ""}
+                        {po.transfer_ref ? ` · ref ${po.transfer_ref}` : ""}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className={cn("font-medium", reverted && "line-through text-muted-foreground")}>
+                        {formatUSD(po.amount)}
+                      </span>
+                      {!reverted && (
+                        <button onClick={() => revert(po)} className="text-xs text-destructive hover:underline">
+                          Revertir
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
+
+      {payProvider && (
+        <PayoutModal
+          provider={payProvider.p}
+          unpaid={payProvider.unpaid}
+          onClose={() => setPayProvider(null)}
+          onDone={() => {
+            setPayProvider(null);
+            onChanged();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function PayoutModal({
+  provider,
+  unpaid,
+  onClose,
+  onDone,
+}: {
+  provider: ProviderProfile;
+  unpaid: Booking[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set(unpaid.map((b) => b.id)));
+  const ba = provider.bank_account;
+  const [bank, setBank] = useState(ba?.bank ?? "");
+  const [account, setAccount] = useState(ba?.account_number ?? "");
+  const [accountType, setAccountType] = useState<BankAccountType>(ba?.account_type ?? "ahorro");
+  const [holder, setHolder] = useState(ba?.holder_name ?? provider.business_name);
+  const [ref, setRef] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const payoutOf = (b: Booking) => b.provider_payout ?? b.subtotal_paid;
+  const selectedSum = unpaid.filter((b) => selected.has(b.id)).reduce((s, b) => s + payoutOf(b), 0);
+  const [amount, setAmount] = useState(String(selectedSum.toFixed(2)));
+  // Keep the amount in sync with the selection unless the admin edited it away.
+  useEffect(() => {
+    setAmount(selectedSum.toFixed(2));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected]);
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  }
+
+  async function submit() {
+    const ids = [...selected];
+    if (!ids.length || !bank || !account.trim()) {
+      notify("Selecciona reservas y completa banco y número de cuenta.", "warning");
+      return;
+    }
+    setBusy(true);
+    try {
+      const bankData = {
+        bank,
+        account_number: account.trim(),
+        account_type: accountType,
+        holder_name: holder.trim() || provider.business_name,
+      };
+      await repo.adminSetProviderBank(provider.id, bankData);
+      await repo.adminCreatePayout({
+        provider_profile_id: provider.id,
+        amount: parseFloat(amount) || selectedSum,
+        booking_ids: ids,
+        bank_name: bankData.bank,
+        account_number: bankData.account_number,
+        account_type: bankData.account_type,
+        holder_name: bankData.holder_name,
+        transfer_ref: ref.trim() || undefined,
+      });
+      notify(`Pago registrado: ${formatUSD(parseFloat(amount) || selectedSum)}.`);
+      onDone();
+    } catch {
+      notify("No pude registrar el pago.", "warning");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`Pagar a ${provider.business_name}`}>
+      <div className="space-y-4">
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-sm font-medium">Reservas a pagar</p>
+            <button
+              onClick={() =>
+                setSelected((s) => (s.size === unpaid.length ? new Set() : new Set(unpaid.map((b) => b.id))))
+              }
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {selected.size === unpaid.length ? "Quitar todas" : "Seleccionar todas"}
+            </button>
+          </div>
+          <div className="grid max-h-44 gap-1.5 overflow-y-auto">
+            {unpaid.map((b) => (
+              <label
+                key={b.id}
+                className="flex cursor-pointer items-center gap-2 rounded-xl border border-border p-2.5 text-sm"
+              >
+                <input type="checkbox" checked={selected.has(b.id)} onChange={() => toggle(b.id)} className="h-4 w-4" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{b.experience_title}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {b.scheduled_date} · {b.confirmation_code}
+                  </span>
+                </span>
+                <span className="shrink-0 font-medium">{formatUSD(payoutOf(b))}</span>
+              </label>
+            ))}
+            {unpaid.length === 0 && <p className="text-sm text-muted-foreground">Sin reservas pendientes.</p>}
+          </div>
+        </div>
+
+        {/* Bank / deposit details */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label>Banco</Label>
+            <select
+              value={bank}
+              onChange={(e) => setBank(e.target.value)}
+              className="h-11 w-full rounded-xl border border-input bg-card px-2 text-sm"
+            >
+              <option value="">Selecciona banco…</option>
+              {EL_SALVADOR_BANKS.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>Número de cuenta</Label>
+            <Input value={account} onChange={(e) => setAccount(e.target.value)} />
+          </div>
+          <div>
+            <Label>Tipo de cuenta</Label>
+            <select
+              value={accountType}
+              onChange={(e) => setAccountType(e.target.value as BankAccountType)}
+              className="h-11 w-full rounded-xl border border-input bg-card px-2 text-sm"
+            >
+              <option value="ahorro">Ahorro</option>
+              <option value="corriente">Corriente</option>
+            </select>
+          </div>
+          <div>
+            <Label>Titular (persona o negocio)</Label>
+            <Input value={holder} onChange={(e) => setHolder(e.target.value)} />
+          </div>
+          <div>
+            <Label>N° / referencia de transferencia (opcional)</Label>
+            <Input value={ref} onChange={(e) => setRef(e.target.value)} />
+          </div>
+          <div className="sm:col-span-2">
+            <Label>Monto a depositar</Label>
+            <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Autorellenado con la suma de las reservas seleccionadas ({formatUSD(selectedSum)}). Puedes ajustarlo.
+            </p>
+          </div>
+        </div>
+
+        <Button className="w-full" disabled={busy || !selected.size} onClick={submit}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />} Registrar pago de{" "}
+          {formatUSD(parseFloat(amount) || selectedSum)}
+        </Button>
+      </div>
+    </Modal>
   );
 }
 

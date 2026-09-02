@@ -76,6 +76,13 @@ export interface ProviderProfile {
   tourist_fee_value?: number | null;
   commission_type?: "percent" | "fixed" | null;
   commission_value?: number | null;
+  // Saved bank account for provider payouts (set by admin, reused per payment).
+  bank_account?: {
+    bank: string;
+    account_number: string;
+    account_type: "ahorro" | "corriente";
+    holder_name: string;
+  } | null;
 }
 
 /** Fill in defaults so older/remote records without the new fields never break. */
