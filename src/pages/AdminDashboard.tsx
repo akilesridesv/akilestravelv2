@@ -307,19 +307,36 @@ function Turistas({ tourists, bookings }: { tourists: TouristProfile[]; bookings
       <h1 className="font-display text-3xl tracking-tight">Turistas</h1>
       <div className="grid gap-2">
         {tourists.map((t) => (
-          <button
+          <div
             key={t.id}
-            onClick={() => setOpen(t)}
-            className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4 text-left transition hover:shadow-sm"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4"
           >
-            <div className="min-w-0">
-              <p className="truncate font-medium">{t.name || "Sin nombre"}</p>
-              <p className="truncate text-sm text-muted-foreground">{t.email}</p>
-            </div>
+            <button
+              onClick={() => {
+                setTab("info");
+                setOpen(t);
+              }}
+              className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium">{t.name || "Sin nombre"}</p>
+                <p className="truncate text-sm text-muted-foreground">{t.email}</p>
+              </div>
+            </button>
             <span className="shrink-0 rounded-full bg-secondary px-2.5 py-0.5 text-xs">
-              {bookingsOf(t.id).length} reservas
+              {bookingsOf(t.id).length}
             </span>
-          </button>
+            <button
+              onClick={() => {
+                setTab("chat");
+                setOpen(t);
+              }}
+              title="Chat de soporte"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-teal transition hover:bg-accent"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </button>
+          </div>
         ))}
         {tourists.length === 0 && <Empty text="Aún no hay turistas registrados." />}
       </div>
@@ -375,22 +392,40 @@ function Proveedores({
   onChanged: () => void;
 }) {
   const [open, setOpen] = useState<ProviderProfile | null>(null);
+  const [tab, setTab] = useState<"gestion" | "chat">("gestion");
   return (
     <div className="space-y-4">
       <h1 className="font-display text-3xl tracking-tight">Proveedores</h1>
       <div className="grid gap-2">
         {providers.map((p) => (
-          <button
+          <div
             key={p.id}
-            onClick={() => setOpen(p)}
-            className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4 text-left transition hover:shadow-sm"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4"
           >
-            <div className="min-w-0">
-              <p className="truncate font-medium">{p.business_name}</p>
-              <p className="truncate text-sm text-muted-foreground">{p.contact_email || p.city || "—"}</p>
-            </div>
+            <button
+              onClick={() => {
+                setTab("gestion");
+                setOpen(p);
+              }}
+              className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium">{p.business_name}</p>
+                <p className="truncate text-sm text-muted-foreground">{p.contact_email || p.city || "—"}</p>
+              </div>
+            </button>
             <VerifPill status={p.verification_status} />
-          </button>
+            <button
+              onClick={() => {
+                setTab("chat");
+                setOpen(p);
+              }}
+              title="Chat con proveedor"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-teal transition hover:bg-accent"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </button>
+          </div>
         ))}
         {providers.length === 0 && <Empty text="Aún no hay proveedores." />}
       </div>
@@ -398,6 +433,7 @@ function Proveedores({
       {open && (
         <ProviderModal
           provider={open}
+          initialTab={tab}
           bookings={bookings.filter((b) => b.activity_id_ref === open.id)}
           feeDefaults={feeDefaults}
           onClose={() => setOpen(null)}
@@ -413,19 +449,21 @@ function Proveedores({
 
 function ProviderModal({
   provider,
+  initialTab = "gestion",
   bookings,
   feeDefaults,
   onClose,
   onChanged,
 }: {
   provider: ProviderProfile;
+  initialTab?: "gestion" | "chat";
   bookings: Booking[];
   feeDefaults: FeeDefaults | null;
   onClose: () => void;
   onChanged: () => void;
 }) {
   const eff = resolveFees(provider, feeDefaults ?? undefined);
-  const [tab, setTab] = useState<"gestion" | "chat">("gestion");
+  const [tab, setTab] = useState<"gestion" | "chat">(initialTab);
   const [tType, setTType] = useState<FeeType>(eff.tourist.type);
   const [tVal, setTVal] = useState(String(eff.tourist.value));
   const [cType, setCType] = useState<FeeType>(eff.commission.type);

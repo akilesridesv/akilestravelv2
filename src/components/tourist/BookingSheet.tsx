@@ -14,6 +14,7 @@ import type { Passenger } from "@/data/repo";
 import { notify } from "@/state/toast";
 import { formatUSD, parseISODate, dayName, monthName, uid, cn } from "@/lib/utils";
 import { resolveFees, computeFees, FALLBACK_FEE_DEFAULTS, type FeeDefaults } from "@/lib/fees";
+import { shareExperience } from "@/lib/share";
 import {
   Check,
   ChevronLeft,
@@ -32,6 +33,7 @@ import {
   Ticket as TicketIcon,
   Tag,
   MapPin,
+  Share2,
 } from "lucide-react";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -207,6 +209,32 @@ export function BookingSheet({
   const total = breakdown.total;
   const instant = experience.provider?.booking_mode === "instant";
 
+  // Persist the in-progress selection per experience so a reload/navigation
+  // keeps it; a share link (initial* props) always wins over the saved config.
+  const CFG_KEY = `akiles:bookingcfg:${experience.id}`;
+  useEffect(() => {
+    if (initialDate || initialTime || initialPeople) return;
+    try {
+      const raw = sessionStorage.getItem(CFG_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s.date && dates.includes(s.date)) setDate(s.date);
+      if (typeof s.adults === "number") setAdults(Math.max(1, s.adults));
+      if (typeof s.children === "number") setChildren(Math.max(0, s.children));
+    } catch {
+      /* ignore corrupt storage */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(CFG_KEY, JSON.stringify({ date, time, adults, children }));
+    } catch {
+      /* storage disabled */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, time, adults, children]);
+
   const contact = passengers[0];
   const contactValid =
     !!contact?.name.trim() && !!contact?.email?.trim() && !!contact?.phone?.trim();
@@ -287,6 +315,11 @@ export function BookingSheet({
       setCode(cc);
       setFinalStatus(status);
       setStep("done");
+      try {
+        sessionStorage.removeItem(CFG_KEY);
+      } catch {
+        /* ignore */
+      }
     } catch (e) {
       notify(e instanceof Error ? e.message : "No se pudo completar la reserva.", "warning");
     } finally {
@@ -479,6 +512,13 @@ export function BookingSheet({
               <Button size="lg" className="w-full" disabled={!canBook} onClick={() => setStep("details")}>
                 Continuar <ChevronRight className="h-4 w-4" />
               </Button>
+              <button
+                type="button"
+                onClick={() => shareExperience(experience.id, experience.title, { date, time, people })}
+                className="mt-2 inline-flex w-full items-center justify-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
+              >
+                <Share2 className="h-4 w-4" /> Compartir con esta configuración
+              </button>
             </>
           )}
 

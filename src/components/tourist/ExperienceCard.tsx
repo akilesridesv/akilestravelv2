@@ -3,8 +3,9 @@ import type { PublicExperience } from "@/data/repo";
 import { ExperienceImage } from "@/components/provider/ExperienceImage";
 import { VerifiedTag } from "@/components/tourist/TouristChrome";
 import { displayPrice } from "@/lib/experience";
+import { shareExperience } from "@/lib/share";
 import { formatUSD } from "@/lib/utils";
-import { MapPin, Clock } from "lucide-react";
+import { MapPin, Clock, Share2 } from "lucide-react";
 
 /** Apple-minimal experience card: photo-first, quiet type, clear price. */
 export function ExperienceCard({ e, params = "" }: { e: PublicExperience; params?: string }) {
@@ -20,6 +21,18 @@ export function ExperienceCard({ e, params = "" }: { e: PublicExperience; params
           className="h-full w-full transition-transform duration-500 ease-out group-hover:scale-[1.04]"
         />
         {verified && <VerifiedTag className="absolute left-3 top-3" />}
+        <button
+          type="button"
+          onClick={(ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            shareExperience(e.id, e.title);
+          }}
+          aria-label="Compartir experiencia"
+          className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-background/90 text-ink shadow-sm backdrop-blur transition hover:bg-background"
+        >
+          <Share2 className="h-4 w-4" />
+        </button>
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/45 to-transparent" />
         <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-2 text-white">
           <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium backdrop-blur">

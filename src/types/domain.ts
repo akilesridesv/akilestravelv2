@@ -290,7 +290,8 @@ export interface AppNotification {
 
 export type SupportMeta =
   | { type: "experience"; experience_id: string }
-  | { type: "contact"; name: string; phone?: string; note?: string };
+  | { type: "contact"; name: string; phone?: string; note?: string }
+  | { type: "file"; url: string; name: string; mime: string; size: number; image?: boolean };
 
 /** A support message: admin ↔ a user (tourist/provider), or admin ↔ tourist
  *  about a specific concierge request. */

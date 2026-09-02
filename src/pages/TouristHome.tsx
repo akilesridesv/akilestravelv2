@@ -95,6 +95,44 @@ export default function TouristHome() {
   );
   const taRef = useRef<HTMLTextAreaElement>(null);
 
+  // Persist the browse session (query + filters) so a reload/return keeps it.
+  const HOME_KEY = "akiles:home";
+  useEffect(() => {
+    try {
+      const s = JSON.parse(sessionStorage.getItem(HOME_KEY) || "null");
+      if (s) {
+        if (s.query) setQuery(s.query);
+        if (s.city) setCity(s.city);
+        if (s.category) setCategory(s.category);
+        if (s.filters) setFilters(s.filters);
+      }
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(HOME_KEY, JSON.stringify({ query, city, category, filters }));
+    } catch {
+      /* ignore */
+    }
+  }, [query, city, category, filters]);
+
+  const anyFilter = !!(query || city || category || filters.place || filters.date || filters.people);
+  function resetAll() {
+    setQuery("");
+    setCity("");
+    setCategory("");
+    setFilters({ place: "", date: "", people: "" });
+    setAi(null);
+    try {
+      sessionStorage.removeItem(HOME_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+
   // Auto-grow the search box so the whole query is readable.
   useEffect(() => {
     const el = taRef.current;
@@ -454,6 +492,14 @@ export default function TouristHome() {
               {q}
             </button>
           ))}
+          {anyFilter && (
+            <button
+              onClick={resetAll}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-3 py-1.5 text-sm font-medium text-destructive shadow-sm backdrop-blur-sm transition hover:bg-accent"
+            >
+              <X className="h-3.5 w-3.5" /> Reiniciar filtros
+            </button>
+          )}
         </div>
       </section>
       </div>

@@ -853,6 +853,18 @@ export async function sendSupportMessage(
   return mapSupport(data);
 }
 
+/** Upload a support-chat file to Storage; returns its public metadata. */
+export async function uploadSupportAttachment(ref: string, file: File): Promise<ChatAttachment> {
+  const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `support/${ref}/${uid("att")}.${ext}`;
+  const { error } = await sb()
+    .storage.from("chat-attachments")
+    .upload(path, file, { contentType: file.type || "application/octet-stream", upsert: false });
+  if (error) throw error;
+  const url = sb().storage.from("chat-attachments").getPublicUrl(path).data.publicUrl;
+  return { url, name: file.name, type: file.type || "application/octet-stream", size: file.size };
+}
+
 /** Admin edits a booking's contact/attendee info (no price/provider changes). */
 export async function adminUpdateBooking(
   id: string,

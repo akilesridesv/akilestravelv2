@@ -11,6 +11,7 @@ import { useImageSrc } from "@/hooks/useImageSrc";
 import { useFavorite } from "@/hooks/useFavorites";
 import { bookableDepartures, bookableDates } from "@/lib/availability";
 import { displayPrice } from "@/lib/experience";
+import { shareExperience } from "@/lib/share";
 import { formatUSD, parseISODate, dayName, monthName, cn } from "@/lib/utils";
 import {
   MapPin,
@@ -35,6 +36,7 @@ import {
   Image as ImageIcon,
   Route,
   Maximize2,
+  Share2,
 } from "lucide-react";
 import type { ItineraryStop } from "@/types/domain";
 
@@ -209,6 +211,16 @@ export default function ExperienceDetail() {
                       Ver fechas y reservar
                     </Button>
                     <FavButton id={exp.id} />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        shareExperience(exp.id, exp.title, { date: preDate, people: prePeople })
+                      }
+                      aria-label="Compartir"
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border text-muted-foreground transition hover:bg-accent"
+                    >
+                      <Share2 className="h-5 w-5" />
+                    </button>
                   </div>
                 </>
               ) : (
