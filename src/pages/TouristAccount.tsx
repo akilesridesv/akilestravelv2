@@ -438,6 +438,9 @@ function BookingRow({ b, onOpen, muted }: { b: Booking; onOpen: () => void; mute
         <p className="text-sm text-muted-foreground">
           {fmtDate(b.scheduled_date)} · {b.scheduled_time} · {b.number_of_people} pers.
         </p>
+        <p className="mt-1 inline-flex items-center gap-1 text-xs text-teal">
+          <MessageCircle className="h-3.5 w-3.5" /> Ticket y chat con el proveedor
+        </p>
       </div>
       <StatusPill status={b.booking_status} />
       <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -763,18 +766,18 @@ function RequestModal({
             placeholder="Fechas, zona, número de personas, presupuesto, requerimientos especiales…"
           />
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          <div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="min-w-0">
             <Label>Personas</Label>
             <Input type="number" value={people} onChange={(e) => setPeople(e.target.value)} />
           </div>
-          <div>
+          <div className="min-w-0">
             <Label>Desde</Label>
-            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+            <Input type="date" className="px-3" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
           </div>
-          <div>
+          <div className="min-w-0">
             <Label>Hasta</Label>
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            <Input type="date" className="px-3" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
           </div>
         </div>
         <Button className="w-full" disabled={busy || !title.trim()} onClick={submit}>
