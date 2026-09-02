@@ -8,7 +8,11 @@ import {
   loadExperiences,
   loadBookings,
   loadMyBookings,
+  loadFavorites,
+  addFavorite,
+  removeFavorite,
 } from "@/data/repo";
+import { getFavorites, setFavorites, setFavoritesSync } from "@/lib/favorites";
 
 export interface AuthResult {
   error?: string;
@@ -31,11 +35,25 @@ export async function bootstrapProvider(user: LocalUser): Promise<void> {
   useApp.getState().setSession(user, provider, experiences, bookings);
 }
 
-/** Load a TOURIST's account (profile + their own bookings) into the store. */
+/** Load a TOURIST's account (profile + their own bookings) into the store, and
+ *  sync favorites both ways (merge remote + local, then write through). */
 export async function bootstrapTourist(user: LocalUser): Promise<void> {
   const profile = await ensureTouristProfile(user.id, user.name, user.email);
   const bookings = await loadMyBookings();
   useApp.getState().setTouristSession(user, profile, bookings);
+  try {
+    const remote = await loadFavorites();
+    const local = getFavorites();
+    setFavorites([...new Set([...remote, ...local])]);
+    // Push any guest-saved favorites up to the account.
+    for (const id of local) if (!remote.includes(id)) void addFavorite(user.id, id).catch(() => {});
+    // From now on, the heart writes through to this account.
+    setFavoritesSync((id, on) =>
+      (on ? addFavorite(user.id, id) : removeFavorite(user.id, id)).catch(() => {})
+    );
+  } catch {
+    /* favorites are best-effort; the local heart still works */
+  }
 }
 
 /** Restore path: pick the surface from whether a provider profile exists, so
@@ -98,6 +116,7 @@ export async function authGoogle(next = "/panel"): Promise<AuthResult> {
 
 export async function authSignOut(): Promise<void> {
   if (supabase) await supabase.auth.signOut();
+  setFavoritesSync(null); // stop writing to the signed-out account
   useApp.getState().signOut();
 }
 

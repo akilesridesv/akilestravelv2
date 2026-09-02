@@ -627,6 +627,15 @@ export async function cancelMyBooking(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Move one of the tourist's own bookings to a new date/time. */
+export async function rescheduleMyBooking(id: string, date: string, time: string): Promise<void> {
+  const { error } = await sb()
+    .from("bookings")
+    .update({ scheduled_date: date, scheduled_time: time })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 // favorites --------------------------------------------------------------
 export async function loadFavorites(): Promise<string[]> {
   const { data, error } = await sb().from("favorites").select("activity_id");

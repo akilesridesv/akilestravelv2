@@ -5,6 +5,7 @@ import type { PublicExperience } from "@/data/repo";
 import type { Booking, ConciergeRequestKind } from "@/types/domain";
 import { useApp } from "@/state/store";
 import { searchExperiences } from "@/ai/discovery";
+import { bookableDepartures, bookableDates, departuresOn } from "@/lib/availability";
 import { displayPrice, bookingLink } from "@/lib/experience";
 import { fuzzyMatch } from "@/lib/fuzzy";
 import { isFavorite, toggleFavorite } from "@/lib/favorites";
@@ -81,6 +82,21 @@ const TOOLS: ToolSpec[] = [
         code: { type: "string", description: "Código de confirmación, p. ej. AKT-ABC123" },
         experience: { type: "string", description: "Nombre de la experiencia (si no hay código)" },
       },
+    },
+  },
+  {
+    name: "reschedule_booking",
+    description:
+      "Reagenda (cambia la fecha/hora) de una reserva activa del turista a otra salida disponible de la misma experiencia. CONFIRMA con el turista antes de llamarla. Si la fecha/hora no está disponible, la herramienta devuelve las opciones disponibles.",
+    parameters: {
+      type: "object",
+      properties: {
+        code: { type: "string", description: "Código de confirmación de la reserva" },
+        experience: { type: "string", description: "Nombre de la experiencia (si no hay código)" },
+        date: { type: "string", description: "Nueva fecha YYYY-MM-DD" },
+        time: { type: "string", description: "Nueva hora HH:MM (opcional si la fecha tiene una sola salida)" },
+      },
+      required: ["date"],
     },
   },
   {
@@ -198,16 +214,67 @@ async function runTool(name: string, args: any): Promise<ToolResult> {
       await repo.cancelMyBooking(target.id);
       return { ok: true, message: `Cancelé tu reserva de “${target.experience_title}”. El proveedor fue notificado.`, data: { id: target.id } };
     }
+    case "reschedule_booking": {
+      const bookings = await repo.loadMyBookings().catch(() => [] as Booking[]);
+      const active = bookings.filter((b) =>
+        ["pending_approval", "pending", "confirmed"].includes(b.booking_status)
+      );
+      const code = String(args.code ?? "").trim().toUpperCase();
+      let target = code ? active.find((b) => b.confirmation_code.toUpperCase() === code) : undefined;
+      if (!target && args.experience)
+        target = active.find((b) => fuzzyMatch(String(args.experience), b.experience_title));
+      if (!target)
+        return {
+          ok: false,
+          message:
+            active.length > 1
+              ? "¿Cuál reserva quieres reagendar? Dime el código o el nombre de la experiencia."
+              : "No encontré una reserva activa para reagendar.",
+        };
+      const date = String(args.date ?? "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
+        return { ok: false, message: "Dame la nueva fecha en formato YYYY-MM-DD." };
+      const exp = await repo.loadPublishedExperience(target.activity_id).catch(() => null);
+      if (!exp) return { ok: false, message: "No pude cargar la disponibilidad de esa experiencia." };
+      const deps = bookableDepartures(exp);
+      const dates = bookableDates(deps);
+      if (!dates.includes(date))
+        return {
+          ok: true,
+          message: `Esa fecha no está disponible. Fechas disponibles: ${dates.slice(0, 10).join(", ") || "ninguna por ahora"}.`,
+          data: { availableDates: dates.slice(0, 12) },
+        };
+      const times = departuresOn(deps, date).map((d) => d.time);
+      let time = String(args.time ?? "").trim();
+      if (time && !times.includes(time))
+        return {
+          ok: true,
+          message: `A esa hora no hay salida el ${date}. Horas disponibles: ${times.join(", ")}.`,
+          data: { availableTimes: times },
+        };
+      if (!time) {
+        if (times.length === 1) time = times[0];
+        else
+          return {
+            ok: true,
+            message: `¿A qué hora el ${date}? Opciones: ${times.join(", ")}.`,
+            data: { availableTimes: times },
+          };
+      }
+      await repo.rescheduleMyBooking(target.id, date, time);
+      return {
+        ok: true,
+        message: `Reagendé “${target.experience_title}” para el ${date} a las ${time}. El proveedor verá el cambio.`,
+        data: { id: target.id },
+      };
+    }
     case "save_favorite": {
       const e = resolveExperience(String(args.experience ?? ""));
       if (!e) return { ok: false, message: "No encontré esa experiencia." };
       const on = args.on !== false;
-      const currently = isFavorite(e.id);
-      if (on !== currently) toggleFavorite(e.id);
-      if (CTX.userId) {
-        if (on) await repo.addFavorite(CTX.userId, e.id).catch(() => {});
-        else await repo.removeFavorite(CTX.userId, e.id).catch(() => {});
-      }
+      // toggleFavorite writes through to the account when signed in (see
+      // setFavoritesSync in bootstrapTourist), so no direct repo call here.
+      if (on !== isFavorite(e.id)) toggleFavorite(e.id);
       return { ok: true, message: on ? `Guardé “${e.title}” en tus favoritos.` : `Quité “${e.title}” de favoritos.` };
     }
     case "update_interests": {
@@ -267,6 +334,7 @@ function systemPrompt(): string {
     "- Para sugerir experiencias del catálogo usa recommend_experiences.",
     "- Para reservar usa start_booking: abre la reserva prellenada. NUNCA digas que la reserva quedó hecha; el turista la confirma en pantalla.",
     "- Para ver reservas usa list_my_bookings. Para cancelar, PRIMERO confirma con el turista y luego llama cancel_booking.",
+    "- Para reagendar usa reschedule_booking (confirma antes). Si la fecha/hora no está disponible, la herramienta te devuelve las opciones; ofréceselas al turista.",
     "- Guarda favoritos con save_favorite y actualiza intereses con update_interests cuando el turista exprese gustos.",
     "- Si pide algo que NO existe como experiencia (alquilar vehículo, guía, conductor, alojamiento o algo a medida), reúne los detalles y usa create_request para enviarlo a Akiles Travel. Dile que el equipo lo contactará.",
     "- No inventes experiencias, precios, fechas ni códigos. Si falta info, pregunta una cosa a la vez.",
@@ -333,7 +401,12 @@ export async function runTouristTurn(
         const res = await runTool(c.functionCall.name, c.functionCall.args ?? {});
         if (res.data?.ids) matches.push(...res.data.ids);
         if (res.data?.bookingPath) bookingPath = res.data.bookingPath;
-        if (["cancel_booking", "save_favorite", "update_interests", "create_request"].includes(c.functionCall.name) && res.ok)
+        if (
+          ["cancel_booking", "reschedule_booking", "save_favorite", "update_interests", "create_request"].includes(
+            c.functionCall.name
+          ) &&
+          res.ok
+        )
           changed = true;
         responseParts.push({ functionResponse: { name: c.functionCall.name, response: res } });
       }

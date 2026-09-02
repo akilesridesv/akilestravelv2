@@ -29,6 +29,14 @@ function commit(ids: string[]) {
   listeners.forEach((l) => l());
 }
 
+// Optional write-through to the account (set on tourist login, cleared on
+// logout). Keeps this module backend-free while syncing when signed in.
+type SyncHandler = (id: string, on: boolean) => void;
+let syncHandler: SyncHandler | null = null;
+export function setFavoritesSync(fn: SyncHandler | null) {
+  syncHandler = fn;
+}
+
 export function getFavorites(): string[] {
   return cache;
 }
@@ -38,7 +46,14 @@ export function isFavorite(id: string): boolean {
 }
 
 export function toggleFavorite(id: string) {
-  commit(cache.includes(id) ? cache.filter((x) => x !== id) : [...cache, id]);
+  const on = !cache.includes(id);
+  commit(on ? [...cache, id] : cache.filter((x) => x !== id));
+  syncHandler?.(id, on);
+}
+
+/** Replace the whole set (used to load the account's saved list on login). */
+export function setFavorites(ids: string[]) {
+  commit([...new Set(ids)]);
 }
 
 export function subscribe(l: Listener): () => void {
