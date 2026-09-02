@@ -54,6 +54,31 @@ function Field({ label, value, full }: { label: string; value: React.ReactNode; 
   );
 }
 
+/** Load an image (from /public) as a PNG data URL + intrinsic size, for jsPDF. */
+async function loadImageData(
+  url: string
+): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+    const size = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+    return { dataUrl, ...size };
+  } catch {
+    return null;
+  }
+}
+
 /** Build the ticket as a PDF blob (voyage-style boarding-pass layout). */
 async function buildTicketPdf(d: TicketData): Promise<Blob> {
   const { jsPDF } = await import("jspdf");
@@ -67,18 +92,26 @@ async function buildTicketPdf(d: TicketData): Promise<Blob> {
 
   const doc = new jsPDF({ unit: "mm", format: [W, H] });
 
-  // Header band
+  // Header band with the official Akiles Travel logo (white version). Falls
+  // back to a text wordmark if the asset can't be loaded.
   doc.setFillColor(...INK);
   doc.rect(0, 0, W, 18, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
-  doc.setTextColor(255, 255, 255);
-  doc.text("akiles", M, 11.5);
-  const brandW = doc.getTextWidth("akiles");
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(...YELLOW);
-  doc.text("travel", M + brandW + 1.5, 11.5);
+  const logo = await loadImageData("/akiles-logo-white.png");
+  if (logo) {
+    const logoH = 6; // mm
+    const logoW = (logo.width / logo.height) * logoH;
+    doc.addImage(logo.dataUrl, "PNG", M, (18 - logoH) / 2, logoW, logoH);
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.setTextColor(255, 255, 255);
+    doc.text("akiles", M, 11.5);
+    const brandW = doc.getTextWidth("akiles");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...YELLOW);
+    doc.text("travel", M + brandW + 1.5, 11.5);
+  }
   const status = d.confirmed ? "CONFIRMADO" : "PENDIENTE";
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
