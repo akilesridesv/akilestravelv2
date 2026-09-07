@@ -111,7 +111,14 @@ export default function TouristHome() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Skip the first save (mount, empty state) so it can't clobber the restored
+  // values before the restore effect's state update has been applied.
+  const savedOnce = useRef(false);
   useEffect(() => {
+    if (!savedOnce.current) {
+      savedOnce.current = true;
+      return;
+    }
     try {
       sessionStorage.setItem(HOME_KEY, JSON.stringify({ query, city, category, filters }));
     } catch {
@@ -457,15 +464,14 @@ export default function TouristHome() {
                 />
               </label>
               <div className="flex items-center gap-3 sm:col-span-3">
-                {hasFilters && (
-                  <button
-                    type="button"
-                    onClick={() => setFilters({ place: "", date: "", people: "" })}
-                    className="text-xs text-muted-foreground underline underline-offset-2"
-                  >
-                    Limpiar
-                  </button>
-                )}
+                <button
+                  type="button"
+                  disabled={!hasFilters}
+                  onClick={() => setFilters({ place: "", date: "", people: "" })}
+                  className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-accent disabled:opacity-40"
+                >
+                  <X className="h-3 w-3" /> Limpiar filtros
+                </button>
                 <button
                   type="button"
                   onClick={() => {
