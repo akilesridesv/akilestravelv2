@@ -12,6 +12,8 @@ import { displayPrice } from "@/lib/experience";
 import { formatUSD, cn } from "@/lib/utils";
 import { notify } from "@/state/toast";
 import { Sparkles, Send, Loader2, MapPin, ArrowRight } from "lucide-react";
+import { isConciergeEnabled } from "@/concierge/client";
+import { AkilesConciergeChat } from "./AkilesConciergeChat";
 
 interface Msg {
   role: "user" | "assistant";
@@ -30,6 +32,9 @@ const SUGGESTIONS = [
 /** Agentic tourist concierge chat: recommends, starts bookings, manages
  *  reservations and files requests with Akiles — all by conversation. */
 export function ConciergeChat({ onChanged }: { onChanged?: () => void }) {
+  return isConciergeEnabled ? <AkilesConciergeChat /> : <LegacyConciergeChat onChanged={onChanged} />;
+}
+function LegacyConciergeChat({ onChanged }: { onChanged?: () => void }) {
   const navigate = useNavigate();
   const { data } = usePublishedExperiences();
   const catalog = useMemo(() => data ?? [], [data]);

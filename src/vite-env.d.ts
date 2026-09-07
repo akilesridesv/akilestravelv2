@@ -7,6 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_AI_PROVIDER?: string;
   readonly VITE_AI_API_KEY?: string;
   readonly VITE_AI_MODEL?: string;
+  readonly VITE_CONCIERGE_ENABLED?: string;
 }
 
 interface ImportMeta {

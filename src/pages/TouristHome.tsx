@@ -5,6 +5,8 @@ import { searchExperiences, similarExperiences, hasExperienceIntent, citiesOf, c
 import { runConciergeTurn, type ConciergeResult } from "@/ai/concierge";
 import { heuristicShelves, generateShelves, type Shelf } from "@/ai/shelves";
 import { isLLMEnabled } from "@/ai/llm";
+import { isConciergeEnabled } from "@/concierge/client";
+import { AkilesConciergeChat } from "@/components/tourist/AkilesConciergeChat";
 import { bookableDepartures, bookableDates } from "@/lib/availability";
 import { ExperienceCard } from "@/components/tourist/ExperienceCard";
 import { Cartelera } from "@/components/tourist/Cartelera";
@@ -85,6 +87,7 @@ export default function TouristHome() {
   const { data, loading } = usePublishedExperiences();
   const list = data ?? [];
   const [query, setQuery] = useState("");
+  const [conciergeInput, setConciergeInput] = useState<{ id: string; text: string }>();
   const [city, setCity] = useState<string>("");
   const [category, setCategory] = useState<string>("");
   const [filters, setFilters] = useState<Filters>({ place: "", date: "", people: "" });
@@ -130,6 +133,7 @@ export default function TouristHome() {
 
   const anyFilter = !!(query || city || category || filters.place || filters.date || filters.people);
   function resetAll() {
+    setConciergeInput(undefined);
     searchRequest.current?.abort();
     setQuery("");
     setCity("");
@@ -233,6 +237,10 @@ export default function TouristHome() {
 
   async function ask() {
     const q = buildQuery();
+    if (isConciergeEnabled && q) {
+      setConciergeInput({ id: crypto.randomUUID(), text: q });
+      return;
+    }
     if (!q || !list.length) return;
     searchRequest.current?.abort();
     const controller = new AbortController();
@@ -533,7 +541,7 @@ export default function TouristHome() {
 
       {/* Browse / concierge results */}
       <section className="mx-auto max-w-6xl px-5 pt-6 sm:px-8">
-        {ai?.loading ? (
+        {isConciergeEnabled && conciergeInput ? <AkilesConciergeChat initial={conciergeInput} /> : ai?.loading ? (
           <ConciergeLoading q={ai.q} />
         ) : ai?.result ? (
           <ConciergeResults
