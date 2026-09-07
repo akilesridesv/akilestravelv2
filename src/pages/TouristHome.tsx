@@ -313,12 +313,13 @@ export default function TouristHome() {
           Experiencias curadas y verificadas. Dinos qué buscas y reserva en minutos.
         </p>
 
+        <div className="relative mx-auto mt-7 w-full max-w-xl">
         <form
           onSubmit={(e) => {
             e.preventDefault();
             ask();
           }}
-          className="mx-auto mt-7 w-full max-w-xl rounded-3xl border border-border bg-card p-2 text-left shadow-sm focus-within:ring-2 focus-within:ring-ring"
+          className="w-full rounded-3xl border border-border bg-card p-2 text-left shadow-sm focus-within:ring-2 focus-within:ring-ring"
         >
           <div className="flex items-start gap-2 px-2 pt-1">
             <Search className="mt-2 h-5 w-5 shrink-0 text-muted-foreground" />
@@ -408,10 +409,11 @@ export default function TouristHome() {
           </div>
         </form>
 
-        {/* Filters panel (opened from the + menu) */}
-        <div className="mx-auto mt-3 flex max-w-xl flex-col items-center gap-3">
-          {showFilters && (
-            <div className="grid w-full grid-cols-1 gap-3 rounded-2xl border border-border bg-card p-3 text-left sm:grid-cols-3">
+        {/* Filters popover (opened from the + menu) — closes on outside click */}
+        {showFilters && (
+          <>
+            <div className="fixed inset-0 z-20" onClick={() => setShowFilters(false)} />
+            <div className="absolute left-0 right-0 top-full z-30 mt-2 grid grid-cols-1 gap-3 rounded-2xl border border-border bg-card p-3 text-left shadow-xl sm:grid-cols-3">
               <label className="text-sm">
                 <span className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
                   <MapPin className="h-3 w-3" /> Lugar
@@ -476,12 +478,13 @@ export default function TouristHome() {
                 </button>
               </div>
             </div>
-          )}
-
-          <p className="text-xs font-medium text-foreground/80 [text-shadow:0_1px_10px_rgba(255,255,255,0.75)]">
-            Pregúntale al concierge en tus palabras — o toca <b>+</b> para filtros y más.
-          </p>
+          </>
+        )}
         </div>
+
+        <p className="mx-auto mt-3 max-w-xl text-xs font-medium text-foreground/80 [text-shadow:0_1px_10px_rgba(255,255,255,0.75)]">
+          Pregúntale al concierge en tus palabras — o toca <b>+</b> para filtros y más.
+        </p>
 
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           {QUICK.map((q) => (
