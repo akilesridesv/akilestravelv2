@@ -40,7 +40,8 @@ function catalog(list: PublicExperience[]) {
 
 export async function runConciergeTurn(
   query: string,
-  list: PublicExperience[]
+  list: PublicExperience[],
+  signal?: AbortSignal
 ): Promise<ConciergeResult> {
   const today = new Date().toISOString().slice(0, 10);
   const system = [
@@ -51,13 +52,13 @@ export async function runConciergeTurn(
     "Sé FLEXIBLE con el lenguaje y tolera errores de escritura: 'ciudas'→'ciudad', 'aventra'→'aventura', 'surf' aunque venga mal escrito, acentos faltantes, etc.",
     "Interpreta fechas relativas respecto a hoy: 'hoy' = la fecha de hoy, 'mañana' = el día siguiente, 'este fin de semana' = el próximo sábado/domingo.",
     "Si NO hay disponibilidad en la fecha pedida, dilo con amabilidad y sugiere las FECHAS CERCANAS que sí están disponibles (mira available_dates), por ejemplo: 'Para hoy no hay disponibilidad, pero este sábado 30 puedes...'. Menciona esas fechas concretas.",
-    "Actúa como un CONCIERGE experto y servicial: busca exhaustivamente por actividad, tags, ubicación y fecha; interpreta la intención aunque el pedido sea vago ('¿qué hago mañana en El Tunco?') o muy específico ('tour en lancha en El Tunco para 4'). Si no hay match exacto, ofrece SIEMPRE lo más parecido disponible y añade UNA pregunta breve para afinar (ej. '¿prefieres algo de aventura o más relax?', '¿te sirve otra fecha o zona cercana?'). Tu meta es facilitarle al turista lo que busca.",
-    "SIEMPRE responde de forma útil. Nunca dejes 'matches' vacío si el catálogo tiene experiencias.",
     "Devuelve EXCLUSIVAMENTE un JSON con esta forma: { reply, matches, people, date }.",
-    "- reply: texto corto, cálido y útil, en español (2–4 frases). Si hay coincidencias, descríbelas brevemente e invita a reservar. Si NO hay coincidencia exacta, dilo con amabilidad y SIEMPRE ofrece las experiencias más parecidas que estén disponibles (por actividad, zona o fecha). NUNCA te quedes sin responder ni devuelvas matches vacío si hay algo en el catálogo. Puedes usar **negritas** y viñetas.",
-    "- matches: array de ids del catálogo, ordenados por relevancia (máx 6). SOLO ids que existan. Prioriza los que coincidan en ubicación y actividad; si el turista pide una fecha, prioriza los que la tengan en available_dates. Si no hay match exacto, incluye igualmente las alternativas más cercanas (no lo dejes vacío).",
     "- people: entero con el número de personas si lo menciona; si no, null.",
     "- date: fecha YYYY-MM-DD si menciona una (asume el próximo año en curso si no da año); si no, null.",
+    "Identifica primero el TIPO de actividad solicitado y compáralo con título, categoría, tags y descripción del catálogo. Parecido ortográfico no significa parecido semántico: playa no es plaza y café no es calle.",
+    "- reply: explica brevemente si encontraste coincidencias exactas. Si solo hay alternativas SIMILARES por la actividad, di explícitamente que no encontraste lo solicitado y explica por qué sugieres cada alternativa. No presentes alternativas como coincidencias exactas.",
+    "- matches: máximo 6 ids reales. Incluye solo coincidencias o alternativas con una relación clara de actividad (ej. playa → surf o snorkel). Café o scooters no son alternativas a playa. Compartir país, precio, proveedor o ser al aire libre no basta.",
+    "Si no existe una coincidencia ni una alternativa relacionada, devuelve matches: [] y di que no hay actividades de ese tipo ni similares; pregunta si desea explorar otro tipo. Nunca rellenes resultados con todo el catálogo.",
     "Nunca inventes experiencias, ids, precios ni fechas.",
     "",
     "CATÁLOGO (JSON):",
@@ -85,7 +86,7 @@ export async function runConciergeTurn(
       },
     },
     },
-    { retryOnTimeout: false }
+    { retryOnTimeout: false, signal }
   );
 
   const text: string =

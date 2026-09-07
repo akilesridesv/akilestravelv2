@@ -26,10 +26,13 @@ export interface LLMTurn {
  */
 export async function generate(
   payload: unknown,
-  opts?: { retryOnTimeout?: boolean }
+  opts?: { retryOnTimeout?: boolean; signal?: AbortSignal }
 ): Promise<any> {
   if (!supabase) throw new Error("Supabase no configurado");
-  const attempt = () => supabase!.rpc("llm_generate", { payload });
+  const attempt = () => {
+    const request = supabase!.rpc("llm_generate", { payload });
+    return opts?.signal ? request.abortSignal(opts.signal) : request;
+  };
   let { data, error } = await attempt();
   const retry = opts?.retryOnTimeout ?? true;
   if (retry && error && /tim(e|ed)\s?out|timeout/i.test(error.message ?? "")) {

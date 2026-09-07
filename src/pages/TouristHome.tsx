@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { usePublishedExperiences } from "@/hooks/usePublicData";
-import { searchExperiences, citiesOf, categoriesOf } from "@/ai/discovery";
+import { searchExperiences, similarExperiences, hasExperienceIntent, citiesOf, categoriesOf } from "@/ai/discovery";
 import { runConciergeTurn, type ConciergeResult } from "@/ai/concierge";
 import { heuristicShelves, generateShelves, type Shelf } from "@/ai/shelves";
 import { isLLMEnabled } from "@/ai/llm";
@@ -94,6 +94,8 @@ export default function TouristHome() {
     null
   );
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const searchRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => searchRequest.current?.abort(), [query, filters, city, category]);
 
   // Persist the browse session (query + filters) so a reload/return keeps it.
   const HOME_KEY = "akiles:home";
@@ -128,6 +130,7 @@ export default function TouristHome() {
 
   const anyFilter = !!(query || city || category || filters.place || filters.date || filters.people);
   function resetAll() {
+    searchRequest.current?.abort();
     setQuery("");
     setCity("");
     setCategory("");
@@ -221,42 +224,56 @@ export default function TouristHome() {
     }
     if (filters.people) {
       const n = parseInt(filters.people, 10);
-      if (n) r = r.filter((e) => e.max_capacity >= n);
+      if (n) r = r.filter((e) => e.max_capacity >= n && (e.min_capacity ?? 1) <= n);
     }
-    if (filters.date) r = r.filter((e) => bookableDates(bookableDepartures(e)).includes(filters.date));
+    if (filters.date) r = r.filter((e) => bookableDepartures(e).some((d) =>
+      d.date === filters.date && d.capacity >= (Number(filters.people) || 1)));
     return r;
   }
 
   async function ask() {
     const q = buildQuery();
     if (!q || !list.length) return;
-    setAi({ loading: true, q });
-
-    if (isLLMEnabled) {
-      try {
-        const result = await runConciergeTurn(q, list);
-        const ids = result.matchIds.length ? result.matchIds : clientFilter().map((e) => e.id);
-        setAi({ loading: false, q, result: { ...result, matchIds: ids } });
-        return;
-      } catch (e) {
-        console.error("Concierge error", e);
-      }
-    }
+    searchRequest.current?.abort();
+    const controller = new AbortController();
+    searchRequest.current = controller;
 
     // Fell through (LLM off or slow): show relevant results instantly, never a dead end.
     const fc = clientFilter();
+    const relevant = searchExperiences(list, query);
+    const similar = similarExperiences(list, query);
+    const alternatives = relevant.length ? relevant : similar;
+    const dates = [...new Set(relevant.flatMap((e) => bookableDepartures(e)
+      .filter((d) => d.capacity >= (Number(filters.people) || 1)).map((d) => d.date)))].sort().slice(0, 3);
     setAi({
       loading: false,
       q,
       result: {
         reply: fc.length
-          ? "Esto es lo más parecido a lo que buscas. ¿Quieres afinar por zona, fecha o número de personas?"
-          : "No encontré algo exacto para tu búsqueda, pero aquí tienes nuestras experiencias disponibles — ajusta los filtros o intenta con otras palabras.",
-        matchIds: (fc.length ? fc : list).map((e) => e.id),
+          ? `Encontré ${fc.length} ${fc.length === 1 ? "experiencia que coincide" : "experiencias que coinciden"} con tu búsqueda.`
+          : relevant.length
+            ? `Encontré experiencias relacionadas, pero no coinciden con todos los filtros seleccionados${filters.date ? ` (fecha: ${filters.date})` : ""}${filters.people ? ` para ${filters.people} personas` : ""}${filters.place ? ` en ${filters.place}` : ""}. Revisa su ubicación, fechas y límites de grupo.${filters.date && dates.length ? ` Otras fechas con salidas: ${dates.join(", ")}.` : ""}`
+            : similar.length
+              ? "No encontré una actividad como la que pides. Te sugiero estas experiencias de un tipo similar; revisa sus fechas, ubicación y cupos."
+              : "No encontré una actividad como la que pides ni experiencias similares en el catálogo actual. ¿Quieres buscar otro tipo de experiencia?",
+        matchIds: (fc.length ? fc : alternatives).map((e) => e.id),
         people: filters.people ? parseInt(filters.people, 10) : null,
-        date: filters.date || null,
+        date: fc.length ? filters.date || null : null,
       },
     });
+    // Results are already visible. Ask Gemini only for ambiguous searches.
+    if (!isLLMEnabled || relevant.length || hasExperienceIntent(query)) return;
+    const timer = window.setTimeout(() => controller.abort(), 4000);
+    try {
+      const result = await runConciergeTurn(q, list, controller.signal);
+      if (!controller.signal.aborted && searchRequest.current === controller) {
+        setAi((current) => current?.q === q ? { loading: false, q, result } : current);
+      }
+    } catch (e) {
+      if (!controller.signal.aborted) console.error("Concierge error", e);
+    } finally {
+      window.clearTimeout(timer);
+    }
   }
 
   const aiExperiences = ai?.result
