@@ -287,8 +287,10 @@ export default function TouristHome() {
     <div className="min-h-dvh bg-background">
       <TouristHeader />
 
-      {/* Hero + concierge, over an El Salvador destination backdrop */}
-      <div className="relative isolate overflow-hidden">
+      {/* Hero + concierge, over an El Salvador destination backdrop.
+          No overflow-hidden (would clip the concierge "+" menu) and a higher
+          z so its dropdown sits above the section below. */}
+      <div className="relative isolate z-20">
         {/* Adventure photo (surfer at sunset, El Salvador / Surf City), faded
             into the page; text/controls get their own scrims so they stay legible. */}
         <div aria-hidden className="pointer-events-none absolute inset-0">
