@@ -6,7 +6,7 @@ export const ExtractionSchema = z.object({
   profile: ProfileSchema,
   references: z.array(z.string().max(100)).max(3),
   feedback: z.enum(["none", "too_intense", "reject"]),
-  questionTopic: z.enum(["details", "includes", "policies", "price"]),
+  questionTopic: z.enum(["details", "includes", "policies", "price", "capacity", "schedule"]),
   // Question wording is selected from reviewed templates, never free model prose.
   question: z.enum(["none", "style", "date", "party", "experience", "budget_basis"]),
 }).strict();

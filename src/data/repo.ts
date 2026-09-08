@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { parseBookedSeats } from "@/lib/bookingAvailability";
 import type {
   AppNotification,
   Booking,
@@ -417,7 +418,7 @@ export async function loadSlotBooked(
     p_time: time,
   });
   if (error) throw error;
-  return typeof data === "number" ? data : 0;
+  return parseBookedSeats(data);
 }
 
 /** Create a booking. When a tourist is logged in, user_id links it to their

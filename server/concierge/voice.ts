@@ -23,13 +23,20 @@ export function recommendationsVoice(list: CatalogExperience[], scores: Score[])
   const first = cards[0];
   return { text: `Empezaría por ${first.title}: ${first.reason}.${cards.length > 1 ? ` Como alternativa, puedes revisar ${cards[1].title}.` : ""} ¿Quieres ver qué incluye o consultar una fecha?`, recommendations: cards, handoff: false };
 }
-export function detailsVoice(e: CatalogExperience, topic: "details" | "includes" | "policies" | "price") {
+export function detailsVoice(e: CatalogExperience, topic: "details" | "includes" | "policies" | "price" | "capacity" | "schedule") {
   const price = priceOf(e);
   let text: string;
   if (topic === "includes") text = e.whats_included.length ? `${e.title} incluye, según su ficha:\n${e.whats_included.map((s) => `• ${s}`).join("\n")}` : `La ficha de ${e.title} no especifica las inclusiones. El equipo debe confirmarlas.`;
   else if (topic === "policies") text = e.cancellation_policy ? `Política registrada para ${e.title}:\n${e.cancellation_policy}` : `No hay una política registrada para ${e.title}. Confírmala con el equipo antes de reservar.`;
-  else if (topic === "price") text = `${e.title}: ${price.from ? "desde " : ""}${price.amount} ${price.currency} por persona como precio base. El total y los cargos se revisan en la pantalla de reserva.`;
-  else text = `${e.title}\n${e.description || "Consulta la ficha para ver sus detalles registrados."}`;
+  else if (topic === "price") text = price.amount == null ? `La ficha de ${e.title} no tiene un precio confirmado. Consulta al equipo antes de reservar.` : `${e.title}: ${price.from ? "desde " : ""}${price.amount} ${price.currency} por persona como precio base. El total y los cargos se revisan en la pantalla de reserva.`;
+  else if (topic === "capacity") text = `${e.title} registra grupos de ${e.min_capacity} a ${e.max_capacity} personas. Esto no confirma cupos libres para una fecha.`;
+  else if (topic === "schedule") {
+    const times = [...new Set(e.recurring_schedules.filter((s) => s.is_active).map((s) => s.start_time.slice(0,5)))];
+    text = times.length ? `La ficha de ${e.title} registra horarios recurrentes a las ${times.join(", ")}. Necesito fecha y tamaño del grupo para verificar una salida concreta.` : `La ficha de ${e.title} no registra horarios recurrentes. Podemos consultar una fecha concreta.`;
+  }
+  // Marketing descriptions can retain stale prices/capacities. Commercial
+  // answers come only from current structured fields and ticket tiers.
+  else text = `${e.title}\n${e.tags.length ? `Tipo de experiencia: ${e.tags.join(", ")}.\n` : ""}${[e.city, e.department, e.country].filter(Boolean).join(", ")}\nGrupo registrado: ${e.min_capacity} a ${e.max_capacity} personas. ${price.amount == null ? "Precio por confirmar." : `Precio base actualizado: ${price.from ? "desde " : ""}${price.amount} ${price.currency} por persona.`} Podemos consultar qué incluye o verificar una fecha.`;
   return { ...response(text), recommendations: [card(e)] };
 }
 export function availabilityVoice(e: CatalogExperience, availability: Availability): ConciergeResponse {

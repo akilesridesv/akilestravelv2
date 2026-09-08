@@ -4,10 +4,10 @@ Akiles Concierge is the stateful tourist advisor. Its brain is split into explic
 
 ## Activation
 
-1. Run `supabase/migrations/0012_concierge.sql` in the target Supabase project's SQL editor. The migration is additive. It adds `activities.recommendation_metadata`, `concierge_sessions`, `concierge_messages`, and three token-checked RPCs.
+1. Follow [the activation checklist](concierge-activation-checklist.md). Apply 0012 once in a transaction and then its additive security follow-up `0013_concierge_hardening.sql`. **0012 alone must not be activated.**
 2. Keep the Gemini key in Supabase Vault under `gemini_api_key`; the existing `public.llm_generate` RPC remains the only model gateway.
-3. On Vercel set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `CONCIERGE_AI_ENABLED=true`, and `VITE_CONCIERGE_ENABLED=true`. The server may use the public anon key because all catalog access is RLS-scoped and the session RPCs are security-definer functions with token and auth ownership checks.
-4. Set `CONCIERGE_DEBUG=true` only while diagnosing a deployment. Logs contain IDs, stages, scores and tool names, never prompt text, tokens or secrets.
+3. Node requires `SUPABASE_SERVICE_ROLE_KEY` exclusively for protected session RPCs. Catalog/model use a separate public anon transport. Never expose the service key through VITE variables. Keep `VITE_CONCIERGE_ENABLED=false` until staging validation; the database runtime flag also defaults to false.
+4. `CONCIERGE_DEBUG=true` logs only safe summaries on Vercel. Full structured state trace additionally requires development mode, and is never returned in production.
 
 Until `VITE_CONCIERGE_ENABLED=true` is set, the existing tourist chat and search remain active. If the migration or server is unavailable, the new chat fails closed and does not recommend an experience.
 
@@ -17,10 +17,12 @@ Until `VITE_CONCIERGE_ENABLED=true` is set, the existing tourist chat and search
 
 ## Security and grounding
 
-The browser stores only a random conversation token. Supabase stores its SHA-256 hash. Each turn has a request ID and a short lease, so retries are idempotent and concurrent turns cannot overwrite state. Catalog tools only read published, active records and re-read chosen records immediately before response generation. The response cards are built from the verified records; Gemini returns IDs only and an ID outside the candidate set is discarded.
+The browser stores a random conversation token. Node hashes it before sending it to Supabase. Server-validated ownership, message-bound request IDs, version checks and fresh lease nonces protect history and retries. Catalog tools only read published active records and re-read chosen records before response generation. Cards use verified records; Gemini ranks IDs only and non-candidate IDs are discarded. Spanish voice templates, not free-form LLM text, generate factual answers.
 
 Availability is never inferred. A date request checks published schedules, date overrides, registration deadlines and the aggregate booked-seat RPC. Tool failure produces an unknown/handoff response.
 
 ## Current limitations
 
-The existing checkout remains the source of truth for payment and final booking. `createBookingIntent` only opens its route after a current availability check. Guest sessions are intentionally scoped to the browser token; signing in later starts the authenticated scope rather than merging histories automatically. Metadata enrichment is a manual editorial task until a reviewed admin workflow is added.
+The existing checkout remains separate. `createBookingIntent` only opens its route; when a date is known it requires a current availability check, otherwise checkout must collect/verify the date. It never creates or charges a reservation. Guest sessions are scoped to the browser token; signing in starts a separate authenticated scope. Historical responses are snapshots. Metadata enrichment is manual.
+
+See [review and remaining deployment decisions](concierge-review.md), [published metadata gaps](concierge-metadata-review.md), [actual graph](concierge-graph.md), and [evaluation coverage](concierge-evaluation.md). Current status is controlled staging readiness, not production activation approval.

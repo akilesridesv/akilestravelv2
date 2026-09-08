@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Loader2, Send, Sparkles } from "lucide-react";
 import { useApp } from "@/state/store";
-import { conciergeRequest, resetConcierge } from "@/concierge/client";
+import { conciergeRequest, conciergeToken, resetConcierge } from "@/concierge/client";
 import type { ConciergeMessage } from "@/concierge/contracts";
 import { ExperienceImage } from "@/components/provider/ExperienceImage";
 
@@ -18,6 +18,9 @@ function Conversation({ scope, initial }: { scope: string; initial?: { id: strin
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
+  const [debug, setDebug] = useState<unknown>();
+  const token = useRef<string>();
+  if (!token.current) token.current = conciergeToken(scope);
   const pending = useRef<{ text: string; id: string } | null>(null);
   const sentInitial = useRef<string>();
   const running = useRef(false);
@@ -27,19 +30,19 @@ function Conversation({ scope, initial }: { scope: string; initial?: { id: strin
   useEffect(() => {
     let active = true;
     setReady(false); setError("");
-    conciergeRequest("load", scope).then((result) => {
+    conciergeRequest("load", scope, undefined, undefined, token.current).then((result) => {
       if (active && "messages" in result) { setMessages(result.messages); setReady(true); }
     }).catch((e: Error) => { if (active) setError(e.message); });
     return () => { active = false; };
   }, [scope, revision]);
   const send = useCallback(async (text: string) => {
-    if (!text.trim() || running.current || !ready) return;
+    if (!text.trim() || running.current || !ready || (pending.current && pending.current.text !== text)) return;
     running.current = true; setBusy(true); setError(""); setInput("");
     const retry = pending.current?.text === text;
     if (!retry) { pending.current = { text, id: crypto.randomUUID() }; setMessages((m) => [...m, { role: "user", content: text }]); }
     try {
-      const result = await conciergeRequest("turn", scope, text, pending.current!.id);
-      if (alive.current && "response" in result) { setMessages((m) => [...m, { role: "assistant", content: result.response.text, metadata: result.response }]); pending.current = null; }
+      const result = await conciergeRequest("turn", scope, text, pending.current!.id, token.current);
+      if (alive.current && "response" in result) { setMessages((m) => [...m, { role: "assistant", content: result.response.text, metadata: result.response }]); pending.current = null; if (import.meta.env.DEV) setDebug(result.debug); }
     } catch (e) { if (alive.current) setError(e instanceof Error ? e.message : "No pude completar el turno."); }
     finally { running.current = false; if (alive.current) setBusy(false); }
   }, [ready, scope]);
@@ -50,7 +53,7 @@ function Conversation({ scope, initial }: { scope: string; initial?: { id: strin
   return <div className="flex h-[64vh] max-h-[720px] flex-col rounded-2xl border border-border bg-card">
     <div className="flex items-center justify-between border-b border-border px-4 py-3">
       <span className="flex items-center gap-2 font-medium"><Sparkles className="h-4 w-4" /> Akiles Concierge</span>
-      <button disabled={busy} className="text-xs underline" onClick={() => { resetConcierge(scope); pending.current = null; setMessages([]); setRevision((v) => v + 1); }}>Nueva conversación</button>
+      <button disabled={busy} className="text-xs underline" onClick={() => { setReady(false); token.current = resetConcierge(scope); pending.current = null; setDebug(undefined); setMessages([]); setRevision((v) => v + 1); }}>Nueva conversación</button>
     </div>
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4" aria-live="polite">
       {!messages.length && ready && <p className="text-sm text-muted-foreground">Cuéntame qué te gustaría hacer y cómo quieres sentirte. Buscaré entre las experiencias de Akiles.</p>}
@@ -60,7 +63,7 @@ function Conversation({ scope, initial }: { scope: string; initial?: { id: strin
           {m.metadata.recommendations.map((e) => <div key={e.id} className="w-52 shrink-0 overflow-hidden rounded-xl border border-border">
             <ExperienceImage imageRef={e.image} alt={e.title} className="aspect-[4/3] w-full" />
             <div className="space-y-2 p-3"><p className="text-sm font-medium">{e.title}</p><p className="text-xs text-muted-foreground">{e.reason}</p>
-              <p className="text-xs">{e.priceFrom ? "Desde " : ""}{e.price} {e.currency} · precio base por persona</p>
+              <p className="text-xs">{e.price == null ? "Precio por confirmar" : `${e.priceFrom ? "Desde " : ""}${e.price} ${e.currency} · precio base por persona`}</p>
               <Link className="block text-sm font-medium underline" to={e.path}>Ver experiencia</Link>
               <button disabled={busy} className="text-xs underline" onClick={() => void send(`¿Está disponible ${e.title}?`)}>Ver disponibilidad</button>
             </div>
@@ -73,10 +76,11 @@ function Conversation({ scope, initial }: { scope: string; initial?: { id: strin
       {(busy || !ready && !error) && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {busy ? "Revisando tus preferencias y el catálogo…" : "Recuperando la conversación…"}</p>}
       {error && <div role="alert" className="text-sm text-destructive">{error} <button className="underline" onClick={() => pending.current ? void send(pending.current.text) : setRevision((v) => v + 1)}>Reintentar</button></div>}
       <div ref={end} />
+      {import.meta.env.DEV && debug != null && <details className="rounded border p-2 text-xs"><summary>Traza del turno (desarrollo)</summary><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(debug, null, 2)}</pre></details>}
     </div>
     <form className="flex gap-2 border-t border-border p-3" onSubmit={(e) => { e.preventDefault(); void send(input); }}>
       <input aria-label="Mensaje para Akiles Concierge" maxLength={2000} value={input} onChange={(e) => setInput(e.target.value)} placeholder="Cuéntame qué plan tienes en mente…" className="h-11 min-w-0 flex-1 rounded-full border border-input bg-background px-4 text-sm" />
-      <button aria-label="Enviar" disabled={busy || !ready || !input.trim()} className="rounded-full bg-primary p-3 disabled:opacity-50"><Send className="h-4 w-4" /></button>
+      <button aria-label="Enviar" disabled={busy || !ready || !!pending.current || !input.trim()} className="rounded-full bg-primary p-3 disabled:opacity-50"><Send className="h-4 w-4" /></button>
     </form>
   </div>;
 }

@@ -1,18 +1,20 @@
 import { z } from "zod";
-import type { TravelerProfile } from "../../src/concierge/contracts";
+import { ProfileSchema, type TravelerProfile } from "../../src/concierge/contracts";
 import { MetadataSchema } from "./schemas";
 import { SupabaseToolsTransport, ToolError } from "./transport";
 
-const ScheduleSchema = z.object({ day_of_week: z.number(), start_time: z.string(), capacity: z.number(), is_active: z.boolean() });
-const SlotSchema = z.object({ slot_date: z.string(), start_time: z.string(), capacity: z.number(), status: z.string() });
-const TierSchema = z.object({ price: z.coerce.number().nonnegative(), quantity_available: z.number(), quantity_sold: z.number() });
+const timeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/);
+const moneySchema = z.union([z.number().nonnegative(), z.string().regex(/^\d+(?:\.\d+)?$/).transform(Number).pipe(z.number().nonnegative())]).nullable();
+const ScheduleSchema = z.object({ day_of_week: z.number().int().min(0).max(6), start_time: timeSchema, capacity: z.number().int().nonnegative(), is_active: z.boolean(), tier_ids: z.array(z.string().uuid()).optional() });
+const SlotSchema = z.object({ slot_date: z.string(), start_time: timeSchema, capacity: z.number().int().nonnegative(), status: z.string(), tier_ids: z.array(z.string().uuid()).optional() });
+const TierSchema = z.object({ id: z.string().uuid().optional(), price: moneySchema, quantity_available: z.number().int().nonnegative(), quantity_sold: z.number().int().nonnegative() });
 export const ExperienceSchema = z.object({
   id: z.string().uuid(), title: z.string(), description: z.string(), category: z.string().nullable(),
   tags: z.array(z.string()).nullable().transform((v) => v ?? []),
   country: z.string().nullable(), department: z.string().nullable(), city: z.string().nullable(), area: z.string().nullable(),
-  price_per_person: z.coerce.number().nonnegative(), currency: z.string(),
-  min_capacity: z.number(), max_capacity: z.number(), is_active: z.boolean(), publication_status: z.string(),
-  registration_deadline_hours: z.number(), featured_image: z.string().nullable(),
+  price_per_person: moneySchema, currency: z.string(),
+  min_capacity: z.number().int().positive(), max_capacity: z.number().int().positive(), is_active: z.boolean(), publication_status: z.string(),
+  registration_deadline_hours: z.number().nonnegative(), featured_image: z.string().nullable(),
   whats_included: z.array(z.string()), cancellation_policy: z.string().nullable(),
   provider_profile_id: z.string().uuid().nullable(),
   provider_profiles: z.object({ verification_status: z.string(), booking_mode: z.string() }).nullable(),
@@ -27,15 +29,15 @@ export interface CatalogTools {
   getExperiencePrice(id: string): Promise<ReturnType<typeof priceOf> | null>;
   getExperiencePolicies(id: string): Promise<string | null>;
   checkAvailability(id: string, date?: string, partySize?: number, time?: TravelerProfile["timePreference"]): Promise<Availability>;
-  createBookingIntent(input: { experienceId: string; date?: string; partySize?: number }): Promise<string | null>;
+  createBookingIntent(input: { experienceId: string; date?: string; partySize?: number; timePreference?: TravelerProfile["timePreference"] }): Promise<string | null>;
 }
 export function isRecommendable(e: CatalogExperience) {
-  return e.is_active && e.publication_status === "published" &&
+  return e.is_active && e.publication_status === "published" && e.min_capacity <= e.max_capacity &&
     (!e.provider_profile_id || e.provider_profiles?.verification_status === "approved");
 }
-export function priceOf(e: CatalogExperience) {
-  const prices = e.ticket_tiers.filter((t) => !t.quantity_available || t.quantity_sold < t.quantity_available).map((t) => t.price);
-  return { amount: prices.length ? Math.min(...prices) : e.price_per_person, from: prices.length > 0, currency: e.currency };
+export function priceOf(e: CatalogExperience, size = 1) {
+  const prices = e.ticket_tiers.filter((t) => !t.quantity_available || t.quantity_available - t.quantity_sold >= size).map((t) => t.price).filter((p): p is number => p != null);
+  return { amount: e.ticket_tiers.length ? prices.length ? Math.min(...prices) : null : e.price_per_person, from: prices.length > 0, currency: e.currency };
 }
 export function partySize(p: TravelerProfile) { return p.adults == null ? undefined : p.adults + (p.children ?? 0); }
 export function localDate(now = new Date()) { return new Date(now.getTime() - 6 * 3600000).toISOString().slice(0, 10); }
@@ -52,7 +54,7 @@ export function eligibleSlots(e: CatalogExperience, date: string, now = new Date
     return matchesTime && new Date(`${date}T${s.start_time.slice(0, 5)}:00-06:00`).getTime() - now.getTime() >= e.registration_deadline_hours * 3600000;
   });
 }
-const SELECT = "id,title,description,category,tags,country,department,city,area,price_per_person,currency,min_capacity,max_capacity,is_active,publication_status,registration_deadline_hours,featured_image,whats_included,cancellation_policy,provider_profile_id,recommendation_metadata,provider_profiles(verification_status,booking_mode),recurring_schedules(day_of_week,start_time,capacity,is_active),date_slots(slot_date,start_time,capacity,status),ticket_tiers(price,quantity_available,quantity_sold)";
+const SELECT = "id,title,description,category,tags,country,department,city,area,price_per_person,currency,min_capacity,max_capacity,is_active,publication_status,registration_deadline_hours,featured_image,whats_included,cancellation_policy,provider_profile_id,recommendation_metadata,provider_profiles(verification_status,booking_mode),recurring_schedules(day_of_week,start_time,capacity,is_active,tier_ids),date_slots(slot_date,start_time,capacity,status,tier_ids),ticket_tiers(id,price,quantity_available,quantity_sold)";
 export class SupabaseCatalog implements CatalogTools {
   constructor(private db: SupabaseToolsTransport, private log: (tool: string) => void = () => {}) {}
   async searchExperiences(_filters: TravelerProfile) {
@@ -78,24 +80,29 @@ export class SupabaseCatalog implements CatalogTools {
   async getExperiencePolicies(id: string) { return (await this.getExperienceDetails(id))?.cancellation_policy ?? null; }
   async checkAvailability(id: string, date?: string, size?: number, time?: TravelerProfile["timePreference"]): Promise<Availability> {
     this.log("checkAvailability");
-    if (!date || !size) return { status: "unknown", date, times: [] };
+    if (!date || !ProfileSchema.shape.date.safeParse(date).success || !size || !Number.isInteger(size) || size < 1) return { status: "unknown", date, times: [] };
     const e = await this.getExperienceDetails(id);
     if (!e || size < e.min_capacity || size > e.max_capacity) return { status: "unavailable", date, times: [] };
     try {
       const slots = eligibleSlots(e, date, new Date(), time);
       const times: string[] = [];
       for (const s of slots) {
+        if (e.ticket_tiers.length) {
+          const tiers = e.ticket_tiers.filter((t) => !s.tier_ids?.length || (t.id && s.tier_ids.includes(t.id)));
+          if (!tiers.some((t) => !t.quantity_available || t.quantity_available - t.quantity_sold >= size)) continue;
+        }
         const booked = z.number().int().nonnegative().parse(await this.db.rpc("slot_booked_seats", { p_activity: id, p_date: date, p_time: s.start_time }));
-        if (s.capacity - booked >= size) times.push(s.start_time.slice(0, 5));
+        if (Math.min(s.capacity, e.max_capacity) - booked >= size) times.push(s.start_time.slice(0, 5));
       }
       return { status: times.length ? "available" : "unavailable", date, times, checkedAt: new Date().toISOString() };
     } catch { return { status: "unknown", date, times: [] }; }
   }
-  async createBookingIntent(input: { experienceId: string; date?: string; partySize?: number }) {
+  async createBookingIntent(input: { experienceId: string; date?: string; partySize?: number; timePreference?: TravelerProfile["timePreference"] }) {
     this.log("createBookingIntent");
     const e = await this.getExperienceDetails(input.experienceId);
     if (!e) return null;
-    if (input.date && (await this.checkAvailability(e.id, input.date, input.partySize)).status !== "available") return null;
+    if (input.partySize != null && (!Number.isInteger(input.partySize) || input.partySize < e.min_capacity || input.partySize > e.max_capacity)) return null;
+    if (input.date && (await this.checkAvailability(e.id, input.date, input.partySize, input.timePreference)).status !== "available") return null;
     const q = new URLSearchParams();
     if (input.date) q.set("date", input.date);
     if (input.partySize) q.set("people", String(input.partySize));

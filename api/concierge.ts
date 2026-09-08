@@ -13,7 +13,7 @@ export async function nodeHandler(req: IncomingMessage & { body?: unknown }, res
     }
     body = Buffer.concat(chunks).toString("utf8");
   }
-  if (body.length > 5000) { res.statusCode = 413; res.end(); return; }
+  if (Buffer.byteLength(body) > 5000) { res.statusCode = 413; res.end(); return; }
   const headers = new Headers();
   for (const name of ["authorization", "content-type"]) {
     const value = req.headers[name]; if (typeof value === "string") headers.set(name, value);
@@ -28,6 +28,10 @@ export default async function handler(req: IncomingMessage & { body?: unknown },
   return nodeHandler(req, res, {
     url: process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "",
     key: process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY ?? "",
+    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+    enabled: process.env.VITE_CONCIERGE_ENABLED === "true",
+    development: false,
+    clientAddress: process.env.VERCEL === "1" ? String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() : req.socket.remoteAddress ?? "",
     aiEnabled: process.env.CONCIERGE_AI_ENABLED !== "false",
     debug: process.env.CONCIERGE_DEBUG === "true",
   });

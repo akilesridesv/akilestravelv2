@@ -24,8 +24,8 @@ export class GeminiModel implements StructuredModel {
         const raw = await this.db.rpc("llm_generate", { payload: {
           systemInstruction: { parts: [{ text: prompt }] },
           contents: [{ role: "user", parts: [{ text: JSON.stringify(input) }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 1500, responseMimeType: "application/json", responseSchema: jsonSchema },
-        } });
+          generationConfig: { temperature: 0.2, maxOutputTokens: 1500, responseMimeType: "application/json", responseJsonSchema: jsonSchema },
+        } }, false, 1);
         const packet = z.object({ candidates: z.array(z.object({ content: z.object({ parts: z.array(z.object({ text: z.string().optional() })) }) })) }).parse(raw);
         const result = schema.safeParse(JSON.parse(packet.candidates[0]?.content.parts.map((p) => p.text ?? "").join("") ?? ""));
         if (result.success) return result.data;

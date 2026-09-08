@@ -14,12 +14,15 @@ export function hardExclusions(e: CatalogExperience, p: TravelerProfile): string
   const size = partySize(p);
   if (size != null && (size < e.min_capacity || size > e.max_capacity)) reasons.push("capacity");
   if ((p.children ?? 0) > 0 && (m.children_allowed !== true || (m.min_age ?? 0) > 0)) reasons.push("child_eligibility_unknown");
-  const price = priceOf(e);
-  const total = price.amount * (p.budgetBasis === "group" ? size ?? 1 : 1);
+  const price = priceOf(e, size);
+  const total = price.amount == null ? null : price.amount * (p.budgetBasis === "group" ? size ?? 1 : 1);
+  if (total == null && (p.budgetMax != null || p.budgetMin != null)) reasons.push("price_unknown");
+  if (p.date && e.ticket_tiers.length && (p.budgetMax != null || p.budgetMin != null)) reasons.push("date_price_unverified");
   if (p.currency && p.currency !== e.currency) reasons.push("currency");
-  if (p.budgetMax != null && total > p.budgetMax) reasons.push("budgetMax");
-  if (p.budgetMin != null && total < p.budgetMin) reasons.push("budgetMin");
+  if (p.budgetMax != null && total != null && total > p.budgetMax) reasons.push("budgetMax");
+  if (p.budgetMin != null && total != null && total < p.budgetMin) reasons.push("budgetMin");
   if (e.ticket_tiers.length && e.ticket_tiers.every((t) => t.quantity_available > 0 && t.quantity_sold >= t.quantity_available)) reasons.push("tickets_sold_out");
+  else if (size != null && e.ticket_tiers.length && !e.ticket_tiers.some((t) => !t.quantity_available || t.quantity_available - t.quantity_sold >= size)) reasons.push("tickets_insufficient");
   if (p.locationPreferences?.length && !p.locationPreferences.some((loc) => contains([e.country, e.department, e.city, e.area].join(" "), loc))) reasons.push("locationPreferences");
   if (p.interests?.length && !p.interests.some((i) => interestMatch(i, identity(e)))) reasons.push("interests");
   if (p.avoid?.some((avoid) => contains(identity(e), avoid))) reasons.push("avoid");
@@ -53,7 +56,7 @@ export function scoreCandidate(e: CatalogExperience, p: TravelerProfile): Score 
   if (p.adventureLevel != null && m.adventure_level != null) dimensions.adventure = 1 - Math.abs(p.adventureLevel - m.adventure_level) / 4;
   if (p.groupType && m.best_for) dimensions.group = m.best_for.includes(p.groupType) ? 1 : 0;
   if (p.pace && m.pace) dimensions.pace = p.pace === m.pace ? 1 : 0;
-  if (p.budgetMax != null) dimensions.budget = hardExclusions(e, p).includes("budgetMax") ? 0 : 1;
+  if (p.budgetMax != null && priceOf(e).amount != null) dimensions.budget = hardExclusions(e, p).some((r) => ["budgetMax","date_price_unverified"].includes(r)) ? 0 : 1;
   if (p.locationPreferences?.length) dimensions.location = hardExclusions(e, p).includes("locationPreferences") ? 0 : 1;
   let weighted = 0; let total = 0;
   for (const key of Object.keys(dimensions) as Dimension[]) { total += WEIGHTS[key]; weighted += WEIGHTS[key] * (dimensions[key] ?? 0); }

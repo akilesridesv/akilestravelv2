@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PublicExperience } from "@/data/repo";
 import type { Booking, TicketTier } from "@/types/domain";
 import { Modal } from "@/components/ui/modal";
@@ -16,6 +16,7 @@ import { formatUSD, parseISODate, dayName, monthName, uid, cn } from "@/lib/util
 import { resolveFees, computeFees, FALLBACK_FEE_DEFAULTS, type FeeDefaults } from "@/lib/fees";
 import { shareExperience } from "@/lib/share";
 import { addHours } from "@/ai/nlp";
+import { bookingCapacity } from "@/lib/bookingAvailability";
 import {
   Check,
   ChevronLeft,
@@ -106,7 +107,7 @@ export function BookingSheet({
   const [time, setTime] = useState(
     initialTime && times.some((t) => t.time === initialTime) ? initialTime : times[0]?.time ?? ""
   );
-  const dep: Departure | undefined = times.find((t) => t.time === time) ?? times[0];
+  const dep: Departure | undefined = times.find((t) => t.time === time);
 
   // Tiers offered on this departure (empty tier_ids = all tiers of the experience)
   const offeredTiers: TicketTier[] =
@@ -119,29 +120,32 @@ export function BookingSheet({
   const tier = offeredTiers.find((t) => t.id === tierId) ?? null;
 
   // Live remaining capacity = configured capacity − seats already booked.
-  const [booked, setBooked] = useState<number | null>(null);
+  const selectionKey = `${experience.id}:${date}:${time}`;
+  const [availability, setAvailability] = useState<{ key: string; booked: number | null; error: boolean }>();
+  const [availabilityRevision, setAvailabilityRevision] = useState(0);
+  const booked = availability?.key === selectionKey ? availability.booked : null;
+  const availabilityError = availability?.key === selectionKey && availability.error;
   useEffect(() => {
-    if (!isSupabaseConfigured || !date || !time) {
-      setBooked(0);
+    if (!date || !time) return;
+    if (!isSupabaseConfigured) {
+      setAvailability({ key: selectionKey, booked: 0, error: false }); // explicit local demo only
       return;
     }
     let alive = true;
-    setBooked(null); // loading
+    setAvailability({ key: selectionKey, booked: null, error: false });
     repo
       .loadSlotBooked(experience.id, date, time)
-      .then((n) => alive && setBooked(n))
-      .catch(() => alive && setBooked(0));
+      .then((n) => alive && setAvailability({ key: selectionKey, booked: n, error: false }))
+      .catch(() => alive && setAvailability({ key: selectionKey, booked: null, error: true }));
     return () => {
       alive = false;
     };
-  }, [experience.id, date, time]);
+  }, [experience.id, date, time, selectionKey, availabilityRevision]);
 
-  const capacity = Math.min(dep?.capacity ?? experience.max_capacity, experience.max_capacity);
-  const remaining = booked == null ? capacity : Math.max(0, capacity - booked);
   const minPeople = Math.max(1, experience.min_capacity || 1);
+  const { remaining, canBook } = bookingCapacity(booked, dep?.capacity, experience.max_capacity, minPeople);
   const soldOut = booked != null && remaining <= 0;
   const belowMin = !soldOut && booked != null && remaining < minPeople;
-  const canBook = !soldOut && !belowMin;
   const maxPeople = Math.max(minPeople, Math.min(remaining, experience.max_capacity));
   const floorPeople = Math.min(minPeople, maxPeople);
 
@@ -190,6 +194,7 @@ export function BookingSheet({
   const [promoInput, setPromoInput] = useState("");
   const [promo, setPromo] = useState<{ code: string; discount: number; label: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submissionInFlight = useRef(false);
   const [code, setCode] = useState("");
   const [finalStatus, setFinalStatus] = useState<Booking["booking_status"]>("pending_approval");
 
@@ -266,7 +271,8 @@ export function BookingSheet({
   }
 
   async function confirm() {
-    if (!contactValid || !allNamed || !date || !time) return;
+    if (submissionInFlight.current || !canBook || people < minPeople || people > remaining || !contactValid || !allNamed || !date || !time) return;
+    submissionInFlight.current = true;
     setSubmitting(true);
     const status: Booking["booking_status"] = instant ? "confirmed" : "pending_approval";
     const cc = genCode();
@@ -290,6 +296,19 @@ export function BookingSheet({
     };
     try {
       if (isSupabaseConfigured) {
+        // A previous availability snapshot is not authorization to insert.
+        const fresh = await repo.loadPublishedExperience(experience.id);
+        if (!fresh || !fresh.is_active || fresh.publication_status !== "published") throw new Error("Esta experiencia ya no está disponible para reservar.");
+        const freshDeparture = bookableDepartures(fresh).find((d) => d.date === date && d.time === time);
+        const freshBooked = await repo.loadSlotBooked(experience.id, date, time);
+        setAvailability({ key: selectionKey, booked: freshBooked, error: false });
+        const checked = bookingCapacity(freshBooked, freshDeparture?.capacity, fresh.max_capacity, fresh.min_capacity);
+        if (!checked.canBook || people < fresh.min_capacity || people > checked.remaining) throw new Error("Los cupos cambiaron. Revisa otra fecha o reduce el grupo.");
+        if (fresh.tiers.some((t) => t.quantity_available > 0)) throw new Error("Esta opción requiere confirmar el inventario de entradas con Akiles antes de reservar.");
+        const freshTier = fresh.tiers.find((t) => t.id === tier?.id);
+        if (fresh.tiers.length && (!freshTier || (freshDeparture?.tier_ids.length && !freshDeparture.tier_ids.includes(freshTier.id)))) throw new Error("La opción de entrada cambió. Vuelve a elegirla en la experiencia.");
+        const freshUnit = freshTier?.price ?? fresh.price_per_person;
+        if (freshUnit !== unit || fresh.provider?.booking_mode !== experience.provider?.booking_mode) throw new Error("Las condiciones cambiaron. Vuelve a abrir la experiencia antes de reservar.");
         await repo.createBooking({
           activity_id: experience.id,
           user_id: touristUserId,
@@ -324,6 +343,7 @@ export function BookingSheet({
     } catch (e) {
       notify(e instanceof Error ? e.message : "No se pudo completar la reserva.", "warning");
     } finally {
+      submissionInFlight.current = false;
       setSubmitting(false);
     }
   }
@@ -477,7 +497,9 @@ export function BookingSheet({
               />
 
               <div className="space-y-0.5 text-xs">
-                {booked == null ? (
+                {availabilityError ? (
+                  <p role="alert" className="text-destructive">No pude verificar los cupos. <button type="button" className="underline" onClick={() => setAvailabilityRevision((v) => v + 1)}>Reintentar</button></p>
+                ) : booked == null ? (
                   <p className="text-muted-foreground">Verificando cupos…</p>
                 ) : soldOut ? (
                   <p className="font-medium text-destructive">Agotado para esta fecha.</p>
@@ -649,7 +671,8 @@ export function BookingSheet({
                   : "El proveedor confirmará tu solicitud. No se cobra en esta versión."}
               </p>
 
-              <Button size="lg" className="w-full" onClick={confirm} disabled={submitting}>
+              {!canBook && <p role="alert" className="text-sm text-destructive">Necesitamos verificar los cupos antes de continuar. Vuelve al paso de personas para reintentar.</p>}
+              <Button size="lg" className="w-full" onClick={confirm} disabled={submitting || !canBook || people > remaining}>
                 {submitting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" /> Confirmando…

@@ -3,5 +3,5 @@
     "target": "ES2022", "lib": ["ES2022", "DOM"], "module": "ESNext", "moduleResolution": "bundler",
     "strict": true, "noEmit": true, "skipLibCheck": true, "esModuleInterop": true, "types": ["node"]
   },
-  "include": ["server/**/*.ts", "api/**/*.ts", "tests/**/*.ts", "src/concierge/contracts.ts"]
+  "include": ["server/**/*.ts", "api/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts", "src/concierge/contracts.ts"]
 }

@@ -40,14 +40,15 @@ export const StateSchema = z.object({
   pendingRelaxation: z.enum(["budgetMax", "date", "locationPreferences", "interests"]).optional(),
 }).strict();
 export type ConciergeState = z.infer<typeof StateSchema>;
+const ExperiencePathSchema = z.string().regex(/^\/e\/[a-f0-9-]{36}(?:\?(?:date=\d{4}-\d{2}-\d{2}|people=\d+)(?:&(?:date=\d{4}-\d{2}-\d{2}|people=\d+))*)?$/i);
 export const RecommendationSchema = z.object({
   id: z.string().uuid(), title: z.string(), reason: z.string(),
-  price: z.number().nonnegative(), currency: z.string(), priceFrom: z.boolean(),
-  location: z.string(), image: z.string().optional(), path: z.string(),
+  price: z.number().nonnegative().nullable(), currency: z.string(), priceFrom: z.boolean(),
+  location: z.string(), image: z.string().optional(), path: ExperiencePathSchema,
 });
 export const ResponseSchema = z.object({
   text: z.string(), recommendations: z.array(RecommendationSchema).max(3),
-  bookingPath: z.string().optional(), handoff: z.boolean().default(false),
+  bookingPath: ExperiencePathSchema.optional(), handoff: z.boolean().default(false),
 });
 export type ConciergeResponse = z.infer<typeof ResponseSchema>;
 export type ConciergeMessage = { role: "user" | "assistant"; content: string; metadata?: ConciergeResponse };
