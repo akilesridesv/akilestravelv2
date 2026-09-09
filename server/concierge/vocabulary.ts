@@ -14,3 +14,10 @@ export function contains(text: string, term: string) {
 export function interestMatch(interest: string, text: string) {
   return (INTERESTS[normalize(interest)] ?? [interest]).some((term) => contains(text, term));
 }
+const INTEREST_LABELS: Record<string, string> = {
+  cafe: "café", playa: "playa", naturaleza: "naturaleza", aventura: "aventura", scooter: "scooters",
+  cultura: "cultura", atv: "cuatrimotos", gastronomia: "comida", fotografia: "fotografía", montana: "montaña", urbano: "ciudad",
+};
+export function interestLabels(interests: string[] = []) {
+  return [...new Set(interests.map((i) => INTEREST_LABELS[normalize(i)]).filter(Boolean))];
+}

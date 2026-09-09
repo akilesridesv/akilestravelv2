@@ -1,7 +1,9 @@
-import type { ConciergeResponse } from "../../src/concierge/contracts.js";
+import type { ConciergeResponse, TravelerProfile } from "../../src/concierge/contracts.js";
 import type { CatalogExperience, Availability } from "./catalog.js";
 import { priceOf } from "./catalog.js";
 import type { Score, Dimension } from "./scoring.js";
+import { identity } from "./scoring.js";
+import { interestLabels, interestMatch } from "./vocabulary.js";
 
 const REASONS: Record<Dimension, string> = {
   interests: "se relaciona con los intereses que mencionaste", feelings: "su ficha coincide con el ambiente que buscas",
@@ -17,16 +19,32 @@ export function card(e: CatalogExperience, score?: Score): ConciergeResponse["re
     location: [e.city, e.department, e.country].filter(Boolean).join(", "),
     image: e.featured_image ?? undefined, path: `/e/${e.id}` };
 }
-export function recommendationsVoice(list: CatalogExperience[], scores: Score[]): ConciergeResponse {
+export function groundedReason(e: CatalogExperience, p: TravelerProfile): string {
+  const matches = interestLabels((p.interests ?? []).filter((i) => interestMatch(i, identity(e))));
+  const aspects: string[] = [];
+  const concrete = interestLabels(["scooter", "cafe", "atv", "cultura", "gastronomia", "fotografia"].filter((i) => interestMatch(i, identity(e))));
+  const themes = [...new Set([...concrete, ...matches])].slice(0, 2);
+  if (matches.length) aspects.push(`es una experiencia de ${themes.join(" y ")}`);
+  const feelings = e.recommendation_metadata.desired_feelings ?? [];
+  if (p.desiredFeelings?.includes("desconexion") && feelings.includes("desconexion")) aspects.push("su propuesta invita a salir de la rutina");
+  if (p.desiredFeelings?.includes("calma") && feelings.includes("calma")) aspects.push("su propuesta tiene un enfoque de calma");
+  if (p.desiredFeelings?.includes("romance") && feelings.includes("romance")) aspects.push("tiene un enfoque romántico");
+  if (p.groupType === "couple" && e.recommendation_metadata.best_for?.includes("couple")) aspects.push("está pensada para disfrutar en pareja");
+  return aspects.slice(0, 2).join(" y ") || "puedes conocerla mejor en los detalles de la experiencia";
+}
+export function recommendationsVoice(list: CatalogExperience[], scores: Score[], profile: TravelerProfile = {}): ConciergeResponse {
   const cards = list.slice(0, 3).map((e) => card(e, scores.find((s) => s.experienceId === e.id)));
+  cards.forEach((c, index) => { c.reason = groundedReason(list[index], profile); });
   if (!cards.length) return response("No tengo una experiencia verificada para recomendarte con esas preferencias.");
   const first = cards[0];
-  return { text: `Empezaría por ${first.title}: ${first.reason}.${cards.length > 1 ? ` Como alternativa, puedes revisar ${cards[1].title}.` : ""} ¿Quieres ver qué incluye o consultar una fecha?`, recommendations: cards, handoff: false };
+  const opening = profile.groupType === "couple" ? "Para ese plan en pareja, miraría" : "Por lo que me cuentas, empezaría por";
+  const next = profile.date ? "¿Te cuento qué incluye?" : "¿Quieres conocer qué incluye?";
+  return { text: `${opening} ${first.title}: ${first.reason}.${cards.length > 1 ? ` Otra opción es ${cards[1].title}: ${cards[1].reason}.` : ""} ${next}`, recommendations: cards, handoff: false };
 }
 export function detailsVoice(e: CatalogExperience, topic: "details" | "includes" | "policies" | "price" | "capacity" | "schedule") {
   const price = priceOf(e);
   let text: string;
-  if (topic === "includes") text = e.whats_included.length ? `${e.title} incluye, según su ficha:\n${e.whats_included.map((s) => `• ${s}`).join("\n")}` : `La ficha de ${e.title} no especifica las inclusiones. El equipo debe confirmarlas.`;
+  if (topic === "includes") text = e.whats_included.length ? `En ${e.title} tienes incluido:\n${e.whats_included.map((s) => `• ${s}`).join("\n")}` : `La ficha de ${e.title} no especifica qué incluye. Prefiero que el equipo te lo confirme antes de que reserves.`;
   else if (topic === "policies") text = e.cancellation_policy ? `Política registrada para ${e.title}:\n${e.cancellation_policy}` : `No hay una política registrada para ${e.title}. Confírmala con el equipo antes de reservar.`;
   else if (topic === "price") text = price.amount == null ? `La ficha de ${e.title} no tiene un precio confirmado. Consulta al equipo antes de reservar.` : `${e.title}: ${price.from ? "desde " : ""}${price.amount} ${price.currency} por persona como precio base. El total y los cargos se revisan en la pantalla de reserva.`;
   else if (topic === "capacity") text = `${e.title} registra grupos de ${e.min_capacity} a ${e.max_capacity} personas. Esto no confirma cupos libres para una fecha.`;

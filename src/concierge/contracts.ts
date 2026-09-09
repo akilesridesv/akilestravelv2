@@ -37,7 +37,7 @@ export const StateSchema = z.object({
   turnCount: z.number().int().min(0).max(1000).default(0),
   clarificationCount: z.number().int().min(0).max(3).default(0),
   recommendationLoopCount: z.number().int().min(0).max(5).default(0),
-  pendingRelaxation: z.enum(["budgetMax", "date", "locationPreferences", "interests"]).optional(),
+  pendingRelaxation: z.enum(["budgetMax", "date", "locationPreferences", "interests", "desiredFeelings"]).optional(),
 }).strict();
 export type ConciergeState = z.infer<typeof StateSchema>;
 const ExperiencePathSchema = z.string().regex(/^\/e\/[a-f0-9-]{36}(?:\?(?:date=\d{4}-\d{2}-\d{2}|people=\d+)(?:&(?:date=\d{4}-\d{2}-\d{2}|people=\d+))*)?$/i);

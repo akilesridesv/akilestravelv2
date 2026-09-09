@@ -32,6 +32,8 @@ export function hardExclusions(e: CatalogExperience, p: TravelerProfile): string
   if (p.constraints?.length) reasons.push("unsupported_constraint");
   // Feeling-only requests require explicit metadata; do not guess that a cafe is romantic.
   if (!p.interests?.length && p.desiredFeelings?.length && !p.desiredFeelings.some((f) => (m.desired_feelings ?? []).some((mf) => normalize(mf) === normalize(f)))) reasons.push("feelings_unknown");
+  // A broad "aventura" tag cannot substantiate a promise of adrenaline.
+  if (p.desiredFeelings?.includes("emocion") && !(m.desired_feelings ?? []).some((f) => normalize(f) === "emocion")) reasons.push("feelings_unknown");
   return reasons;
 }
 export async function hardFilter(list: CatalogExperience[], state: ConciergeState, tools: CatalogTools) {

@@ -8,6 +8,7 @@ import { RankingSchema, type Extraction } from "./schemas.js";
 import { RANK_PROMPT } from "./prompts.js";
 import { contains, normalize } from "./vocabulary.js";
 import { availabilityVoice, card, detailsVoice, recommendationsVoice, response } from "./voice.js";
+import { noMatchVoice, smallTalk } from "./conversation.js";
 
 export type Trace = { node: string; data?: Record<string, unknown> }[];
 export function verifyIds(ids: string[], candidateIds: string[], records: CatalogExperience[]): CatalogExperience[] {
@@ -29,18 +30,6 @@ function resolveReferences(extraction: Extraction, state: ConciergeState, list: 
   if (!ids.length && !extraction.references.length) ids.push(...(state.mentionedExperienceIds.length ? state.mentionedExperienceIds : state.recommendedExperienceIds));
   return [...new Set(ids)].filter((id) => list.some((e) => e.id === id));
 }
-function noMatch(state: ConciergeState, excluded: Record<string, string[]>): ConciergeResponse {
-  state.recommendationLoopCount = Math.min(5, state.recommendationLoopCount + 1);
-  state.recommendedExperienceIds = [];
-  if (state.recommendationLoopCount >= 5) return response("No he encontrado una opción segura con estos ajustes. El equipo de Akiles puede ayudarte a revisar el caso.", true);
-  if (Object.values(excluded).some((r) => r.includes("availability_unknown"))) return response("No pude verificar la disponibilidad del catálogo. No puedo confirmar cupos; consulta la ficha o pide ayuda al equipo.", true);
-  const options = ["budgetMax", "date", "locationPreferences", "interests"] as const;
-  const key = options.find((k) => Object.values(excluded).some((r) => r.length === 1 && r[0] === k));
-  const phrases = { budgetMax: "¿Quieres flexibilizar el presupuesto máximo?", date: "¿Quieres buscar sin esa fecha?", locationPreferences: "¿Quieres ampliar la ubicación?", interests: "¿Quieres explorar otro tipo de experiencia?" };
-  state.pendingRelaxation = key;
-  state.lastQuestion = key ? phrases[key] : "¿Quieres cambiar el tipo de experiencia o ajustar uno de tus requisitos?";
-  return response(`No encontré una experiencia del catálogo de Akiles que cumpla lo que buscas. ${state.lastQuestion}`);
-}
 export async function runConciergeTurn(input: ConciergeState, message: string, tools: CatalogTools, model: StructuredModel) {
   const state = StateSchema.parse(structuredClone(input));
   const trace: Trace = [{ node: "LOAD_SESSION" }];
@@ -57,6 +46,8 @@ export async function runConciergeTurn(input: ConciergeState, message: string, t
     return { state: StateSchema.parse(state), response: result, trace, timings };
   };
   state.turnCount = Math.min(1000, state.turnCount + 1);
+  const greeting = smallTalk(message, state);
+  if (greeting) return finish(() => response(greeting));
   if (state.turnCount >= 1000 || state.recommendationLoopCount >= 5) return finish(() => response("Llegamos al límite de esta búsqueda. Puedes iniciar una nueva conversación o pedir ayuda al equipo.", true));
   if (/inventa|invent something|make.*up|aunque no este/.test(normalize(message))) return finish(() => response("Solo puedo recomendar experiencias reales del catálogo de Akiles Travel. Puedo ayudarte a encontrar una que encaje contigo, pero no inventarla."));
   const extracted = await measure("intentProfileMs", () => extractProfile(message, state, model));
@@ -120,7 +111,7 @@ export async function runConciergeTurn(input: ConciergeState, message: string, t
   const { valid, excluded } = await measure("filterMs", () => hardFilter(catalog, state, tools));
   state.candidateExperienceIds = valid.slice(0, 100).map((e) => e.id);
   trace.push({ node: "HARD_FILTER", data: { candidateCount: valid.length, candidateIds: valid.map((e) => e.id), excluded } });
-  if (!valid.length) return finish(() => noMatch(state, excluded));
+  if (!valid.length) return finish(() => noMatchVoice(state, excluded));
   const scoringStarted = performance.now();
   const scores = valid.map((e) => scoreCandidate(e, state.travelerProfile)).sort((a, b) => b.totalScore - a.totalScore);
   timings.scoringMs = performance.now() - scoringStarted;
@@ -142,9 +133,10 @@ export async function runConciergeTurn(input: ConciergeState, message: string, t
   state.candidateExperienceIds = candidateIds;
   state.recommendationConfidence = scores[0]?.totalScore;
   state.stage = "recommending";
-  state.lastQuestion = undefined;
+  state.lastQuestion = verified.length ? (state.travelerProfile.date ? "¿Te cuento qué incluye?" : "¿Quieres conocer qué incluye?") : undefined;
+  state.missingInformation = verified.length ? ["includes_confirmation"] : [];
   state.pendingRelaxation = undefined;
   trace.push({ node: "VERIFY_RESULTS", data: { chosenIds: chosen, verifiedIds: state.recommendedExperienceIds, verified: chosen.length === verified.length } });
   trace.push({ node: "GENERATE_RESPONSE" });
-  return finish(() => recommendationsVoice(verified, verified.map((e) => scoreCandidate(e, state.travelerProfile))));
+  return finish(() => recommendationsVoice(verified, verified.map((e) => scoreCandidate(e, state.travelerProfile)), state.travelerProfile));
 }

@@ -50,6 +50,10 @@ export function deterministicExtraction(text: string, now = new Date()): Extract
   const avoid = Object.entries(INTERESTS).filter(([, terms]) => terms.some((term) => contains(q, `sin ${term}`) || contains(q, `no ${term}`))).map(([id]) => id);
   if (avoid.length) p.avoid = avoid;
   const feelings: string[] = [];
+  if (/adrenalina|adrenaline|emocion|thrill/.test(q) && !/sin adrenalina|no.*adrenalina/.test(q)) {
+    feelings.push("emocion");
+    p.interests = [...new Set([...(p.interests ?? []), "aventura"])];
+  }
   if (/romantic|romance/.test(q)) feelings.push("romance");
   if (/tranquil|relax|peaceful|calma/.test(q)) { feelings.push("calma"); p.pace = "relaxed"; }
   if (/diferente|different|rutina|routine|desconect/.test(q)) feelings.push("desconexion");
@@ -76,15 +80,30 @@ export function deterministicExtraction(text: string, now = new Date()): Extract
 }
 export async function extractProfile(message: string, state: ConciergeState, model: StructuredModel, now = new Date()): Promise<Extraction> {
   const safe = deterministicExtraction(message, now);
+  if (acceptsSuggestion(message) && !Object.keys(safe.profile).length) {
+    if (state.missingInformation.includes("includes_confirmation")) return { ...safe, intent: "specific_experience", questionTopic: "includes", references: ["primera"] };
+    if (state.pendingRelaxation) return safe;
+  }
   const inferred = await model.run(PROFILE_PROMPT, { today: localDate(now), previous: state.travelerProfile, lastQuestion: state.lastQuestion, message }, ExtractionSchema);
   if (!inferred) return safe;
+  // Emotion is a desired experience, not an invented numeric safety limit.
+  // Preserve inferred feelings when deterministic extraction also recognizes one.
+  const desiredFeelings = [...new Set([...(inferred.profile.desiredFeelings ?? []), ...(safe.profile.desiredFeelings ?? [])])].slice(0, 20);
   return { ...inferred, intent: safe.intent !== "discover" ? safe.intent : inferred.intent,
-    profile: { ...inferred.profile, ...safe.profile },
+    profile: { ...inferred.profile, ...safe.profile, ...(desiredFeelings.length ? { desiredFeelings } : {}) },
     feedback: safe.feedback !== "none" ? safe.feedback : inferred.feedback,
     references: safe.references.length ? safe.references : inferred.references };
 }
+export function acceptsSuggestion(message: string) {
+  const answer = normalize(message.trim());
+  // Recognize ordinary affirmative replies, but never a qualified/negative consent.
+  return /^(si|yes|ok|vale|claro|de acuerdo|dale|adelante|suena bien)([,.!\s]|$)/.test(answer)
+    && !/\b(no|pero|excepto|sin|aunque|solo|solamente|if|but)\b/.test(answer);
+}
 export function updateProfile(state: ConciergeState, extracted: Extraction, message: string) {
   const previous = state.travelerProfile;
+  const pending = state.pendingRelaxation;
+  const accepts = acceptsSuggestion(message);
   const continuing = state.missingInformation.length > 0 && extracted.intent === "discover" && !extracted.profile.interests?.length && !extracted.profile.desiredFeelings?.length && extracted.feedback === "none";
   state.intent = continuing ? state.intent : extracted.intent;
   state.travelerProfile = ProfileSchema.parse({ ...previous, ...extracted.profile });
@@ -100,8 +119,8 @@ export function updateProfile(state: ConciergeState, extracted: Extraction, mess
   }
   if (state.pendingRelaxation && extracted.profile[state.pendingRelaxation] !== undefined) state.pendingRelaxation = undefined;
   // Relax only the pending constraint after explicit consent; never on timeout.
-  if (state.pendingRelaxation && /^(si|yes|ok|de acuerdo|flexible)[,.!\s]*$/i.test(normalize(message.trim()))) {
-    delete state.travelerProfile[state.pendingRelaxation];
+  if (pending && accepts && extracted.profile[pending] === undefined) {
+    delete state.travelerProfile[pending];
     state.pendingRelaxation = undefined;
   }
   if (extracted.feedback !== "none") {
