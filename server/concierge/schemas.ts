@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { IntentSchema, ProfileSchema } from "../../src/concierge/contracts";
+import { IntentSchema, ProfileSchema } from "../../src/concierge/contracts.js";
 
 export const ExtractionSchema = z.object({
   intent: IntentSchema,

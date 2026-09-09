@@ -1,13 +1,13 @@
-import { StateSchema, type ConciergeState, type ConciergeResponse } from "../../src/concierge/contracts";
-import { type CatalogTools, type CatalogExperience, partySize } from "./catalog";
-import { hardExclusions, hardFilter, scoreCandidate } from "./scoring";
-import { extractProfile, handoffReason, updateProfile } from "./profile";
-import { askSmartQuestion, checkInformationQuality } from "./clarification";
-import { type StructuredModel } from "./model";
-import { RankingSchema, type Extraction } from "./schemas";
-import { RANK_PROMPT } from "./prompts";
-import { contains, normalize } from "./vocabulary";
-import { availabilityVoice, card, detailsVoice, recommendationsVoice, response } from "./voice";
+import { StateSchema, type ConciergeState, type ConciergeResponse } from "../../src/concierge/contracts.js";
+import { type CatalogTools, type CatalogExperience, partySize } from "./catalog.js";
+import { hardExclusions, hardFilter, scoreCandidate } from "./scoring.js";
+import { extractProfile, handoffReason, updateProfile } from "./profile.js";
+import { askSmartQuestion, checkInformationQuality } from "./clarification.js";
+import { type StructuredModel } from "./model.js";
+import { RankingSchema, type Extraction } from "./schemas.js";
+import { RANK_PROMPT } from "./prompts.js";
+import { contains, normalize } from "./vocabulary.js";
+import { availabilityVoice, card, detailsVoice, recommendationsVoice, response } from "./voice.js";
 
 export type Trace = { node: string; data?: Record<string, unknown> }[];
 export function verifyIds(ids: string[], candidateIds: string[], records: CatalogExperience[]): CatalogExperience[] {

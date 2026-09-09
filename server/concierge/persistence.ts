@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createHash } from "node:crypto";
-import { newState, StateSchema, ResponseSchema, type ConciergeState, type ConciergeResponse } from "../../src/concierge/contracts";
-import { SupabaseToolsTransport } from "./transport";
+import { newState, StateSchema, ResponseSchema, type ConciergeState, type ConciergeResponse } from "../../src/concierge/contracts.js";
+import { SupabaseToolsTransport } from "./transport.js";
 const SessionSchema = z.object({ id: z.string().uuid(), userId: z.string().uuid().nullable(), state: z.unknown(), version: z.number().int() });
 function session(raw: unknown) {
   const s = SessionSchema.parse(raw);

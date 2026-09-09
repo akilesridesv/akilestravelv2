@@ -1,5 +1,5 @@
-import type { ConciergeState } from "../../src/concierge/contracts";
-import type { Extraction } from "./schemas";
+import type { ConciergeState } from "../../src/concierge/contracts.js";
+import type { Extraction } from "./schemas.js";
 export const QUESTIONS = {
   style: "¿Te atrae más naturaleza y aventura, o un plan tranquilo con comida o café?",
   date: "¿Para qué fecha te gustaría hacerlo?",

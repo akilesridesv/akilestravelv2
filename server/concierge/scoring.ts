@@ -1,6 +1,6 @@
-import type { ConciergeState, TravelerProfile } from "../../src/concierge/contracts";
-import { isRecommendable, partySize, priceOf, type CatalogExperience, type CatalogTools } from "./catalog";
-import { contains, interestMatch, normalize } from "./vocabulary";
+import type { ConciergeState, TravelerProfile } from "../../src/concierge/contracts.js";
+import { isRecommendable, partySize, priceOf, type CatalogExperience, type CatalogTools } from "./catalog.js";
+import { contains, interestMatch, normalize } from "./vocabulary.js";
 export const WEIGHTS = { interests: 0.3, feelings: 0.2, adventure: 0.1, group: 0.1, pace: 0.1, budget: 0.1, location: 0.1 };
 export type Dimension = keyof typeof WEIGHTS;
 export type Score = { experienceId: string; totalScore: number; dimensions: Partial<Record<Dimension, number>>; supportedReasons: Dimension[] };

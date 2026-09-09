@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { ProfileSchema, type TravelerProfile } from "../../src/concierge/contracts";
-import { MetadataSchema } from "./schemas";
-import { SupabaseToolsTransport, ToolError } from "./transport";
+import { ProfileSchema, type TravelerProfile } from "../../src/concierge/contracts.js";
+import { MetadataSchema } from "./schemas.js";
+import { SupabaseToolsTransport, ToolError } from "./transport.js";
 
 const timeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/);
 const moneySchema = z.union([z.number().nonnegative(), z.string().regex(/^\d+(?:\.\d+)?$/).transform(Number).pipe(z.number().nonnegative())]).nullable();

@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { handleConcierge, type ServerConfig } from "../server/concierge/handler";
+import { handleConcierge, type ServerConfig } from "../server/concierge/handler.js";
 
 export async function nodeHandler(req: IncomingMessage & { body?: unknown }, res: ServerResponse, config: ServerConfig) {
   let body: string;

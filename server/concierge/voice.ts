@@ -1,7 +1,7 @@
-import type { ConciergeResponse } from "../../src/concierge/contracts";
-import type { CatalogExperience, Availability } from "./catalog";
-import { priceOf } from "./catalog";
-import type { Score, Dimension } from "./scoring";
+import type { ConciergeResponse } from "../../src/concierge/contracts.js";
+import type { CatalogExperience, Availability } from "./catalog.js";
+import { priceOf } from "./catalog.js";
+import type { Score, Dimension } from "./scoring.js";
 
 const REASONS: Record<Dimension, string> = {
   interests: "se relaciona con los intereses que mencionaste", feelings: "su ficha coincide con el ambiente que buscas",

@@ -1,12 +1,12 @@
-import { RequestSchema } from "./schemas";
+import { RequestSchema } from "./schemas.js";
 import { z } from "zod";
 import { createHmac } from "node:crypto";
-import { SessionStore } from "./persistence";
-import { SupabaseToolsTransport, ToolError } from "./transport";
-import { SupabaseCatalog } from "./catalog";
-import { GeminiModel } from "./model";
-import { runConciergeTurn } from "./orchestrator";
-import { response } from "./voice";
+import { SessionStore } from "./persistence.js";
+import { SupabaseToolsTransport, ToolError } from "./transport.js";
+import { SupabaseCatalog } from "./catalog.js";
+import { GeminiModel } from "./model.js";
+import { runConciergeTurn } from "./orchestrator.js";
+import { response } from "./voice.js";
 export type ServerConfig = { url: string; key: string; serviceKey: string; enabled: boolean; aiEnabled: boolean; debug: boolean; development: boolean; clientAddress: string };
 export async function handleConcierge(request: Request, config: ServerConfig): Promise<Response> {
   const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });

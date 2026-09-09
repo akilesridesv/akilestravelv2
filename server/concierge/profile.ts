@@ -1,10 +1,10 @@
-import type { ConciergeState, TravelerProfile } from "../../src/concierge/contracts";
-import { ProfileSchema } from "../../src/concierge/contracts";
-import { ExtractionSchema, type Extraction } from "./schemas";
-import type { StructuredModel } from "./model";
-import { PROFILE_PROMPT } from "./prompts";
-import { contains, INTERESTS, normalize } from "./vocabulary";
-import { localDate } from "./catalog";
+import type { ConciergeState, TravelerProfile } from "../../src/concierge/contracts.js";
+import { ProfileSchema } from "../../src/concierge/contracts.js";
+import { ExtractionSchema, type Extraction } from "./schemas.js";
+import type { StructuredModel } from "./model.js";
+import { PROFILE_PROMPT } from "./prompts.js";
+import { contains, INTERESTS, normalize } from "./vocabulary.js";
+import { localDate } from "./catalog.js";
 
 function nextDate(text: string, now: Date) {
   const today = localDate(now);

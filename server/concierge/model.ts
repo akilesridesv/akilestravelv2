@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SupabaseToolsTransport } from "./transport";
+import { SupabaseToolsTransport } from "./transport.js";
 export interface StructuredModel {
   run<T>(prompt: string, input: unknown, schema: z.ZodType<T>): Promise<T | null>;
 }
