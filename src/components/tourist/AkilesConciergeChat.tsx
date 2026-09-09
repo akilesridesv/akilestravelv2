@@ -70,7 +70,7 @@ function Conversation({ scope, initial }: { scope: string; initial?: { id: strin
           </div>)}
         </div>}
         {m.metadata?.recommendations.length === 2 && <button disabled={busy} className="mt-2 text-sm underline" onClick={() => void send(`Compara ${m.metadata!.recommendations.map((e) => e.title).join(" y ")}`)}>Comparar</button>}
-        {m.metadata?.bookingPath && <Link className="mt-2 inline-block rounded-full bg-primary px-4 py-2 text-sm font-semibold" to={m.metadata.bookingPath}>Continuar a reserva</Link>}
+        {m.metadata?.bookingPath && <Link className="mt-2 inline-block rounded-full bg-primary px-4 py-2 text-sm font-semibold" to={m.metadata.bookingPath}>Reservar experiencia</Link>}
         {m.metadata?.handoff && <Link to="/cuenta" className="mt-2 block text-sm underline">Abrir mi cuenta para solicitar ayuda a Akiles</Link>}
       </div>)}
       {(busy || !ready && !error) && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {busy ? "Revisando tus preferencias y el catálogo…" : "Recuperando la conversación…"}</p>}

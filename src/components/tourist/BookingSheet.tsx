@@ -17,6 +17,7 @@ import { resolveFees, computeFees, FALLBACK_FEE_DEFAULTS, type FeeDefaults } fro
 import { shareExperience } from "@/lib/share";
 import { addHours } from "@/ai/nlp";
 import { bookingCapacity } from "@/lib/bookingAvailability";
+import { conversationalDate, conversationalTime } from "@/concierge/booking";
 import {
   Check,
   ChevronLeft,
@@ -77,6 +78,7 @@ export function BookingSheet({
   initialDate,
   initialTime,
   initialPeople,
+  initialChildren,
 }: {
   experience: PublicExperience;
   open: boolean;
@@ -84,6 +86,7 @@ export function BookingSheet({
   initialDate?: string;
   initialTime?: string;
   initialPeople?: number;
+  initialChildren?: number;
 }) {
   const addBooking = useApp((s) => s.addBooking);
   // Link the booking to the tourist's account when they're signed in.
@@ -105,7 +108,7 @@ export function BookingSheet({
   const [date, setDate] = useState(initialDate && dates.includes(initialDate) ? initialDate : dates[0] ?? "");
   const times = departuresOn(deps, date);
   const [time, setTime] = useState(
-    initialTime && times.some((t) => t.time === initialTime) ? initialTime : times[0]?.time ?? ""
+    (initialTime && times.find((t) => t.time.slice(0, 5) === initialTime.slice(0, 5))?.time) || times[0]?.time || ""
   );
   const dep: Departure | undefined = times.find((t) => t.time === time);
 
@@ -151,10 +154,12 @@ export function BookingSheet({
 
   // People split into adults / children. At least one adult; total respects min/max.
   const seed = initialPeople && initialPeople > 0 ? initialPeople : minPeople;
-  const [adults, setAdults] = useState(Math.max(1, seed));
-  const [children, setChildren] = useState(0);
+  const seedChildren = initialChildren != null && initialChildren >= 0 && initialChildren < seed ? initialChildren : 0;
+  const [adults, setAdults] = useState(Math.max(1, seed - seedChildren));
+  const [children, setChildren] = useState(seedChildren);
   const people = adults + children;
   useEffect(() => {
+    if (booked == null) return; // Loading is not a capacity of zero; retain the requested group.
     // Clamp the total into [floor, max] if capacity changed under us.
     if (people > maxPeople) {
       const over = people - maxPeople;
@@ -164,7 +169,7 @@ export function BookingSheet({
       setAdults((a) => a + (floorPeople - people));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [floorPeople, maxPeople]);
+  }, [floorPeople, maxPeople, booked]);
 
   // Per-passenger details. Index 0 is the main contact (name + email + phone).
   const [passengers, setPassengers] = useState<Passenger[]>([]);
@@ -390,6 +395,15 @@ export function BookingSheet({
           {/* ---------------- DATE ---------------- */}
           {step === "date" && (
             <>
+              {initialDate && date === initialDate && initialPeople && (
+                <div className="rounded-2xl bg-secondary/60 p-3 text-sm">
+                  <p className="font-medium">Tu selección</p>
+                  <p>{conversationalDate(date)}{time ? ` a las ${conversationalTime(time)}` : ""} · {people} persona{people === 1 ? "" : "s"}</p>
+                  {booked == null && <p role="status" className="mt-1 text-muted-foreground">{availabilityError ? "No pudimos verificar los cupos." : "Verificando cupos…"}</p>}
+                  {availabilityError && <button className="mt-1 block underline" onClick={() => setAvailabilityRevision((v) => v + 1)}>Reintentar consulta</button>}
+                  <button className="mt-2 underline" onClick={() => setStep("time")}>Cambiar horario o personas</button>
+                </div>
+              )}
               <div className="rounded-2xl border border-border p-3">
                 <BookingCalendar available={dates} selected={date} onSelect={pickDate} />
               </div>
@@ -399,8 +413,8 @@ export function BookingSheet({
                   <span className="font-medium">{fullDate(date)}</span>
                 </p>
               )}
-              <Button size="lg" className="w-full" disabled={!date} onClick={() => setStep("time")}>
-                Continuar <ChevronRight className="h-4 w-4" />
+              <Button size="lg" className="w-full" disabled={!date || (!!initialTime && date === initialDate && (!canBook || people > remaining))} onClick={() => setStep(initialTime && date === initialDate && time.slice(0, 5) === initialTime.slice(0, 5) && initialPeople && !offeredTiers.length ? "details" : "time")}>
+                {initialTime && date === initialDate && initialPeople && !offeredTiers.length ? "Continuar con estos datos" : "Continuar"} <ChevronRight className="h-4 w-4" />
               </Button>
             </>
           )}

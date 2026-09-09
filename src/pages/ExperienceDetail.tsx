@@ -4,6 +4,7 @@ import { usePublishedExperience } from "@/hooks/usePublicData";
 import type { PublicExperience } from "@/data/repo";
 import { ExperienceImage } from "@/components/provider/ExperienceImage";
 import { BookingSheet } from "@/components/tourist/BookingSheet";
+import { readBookingPrefill } from "@/concierge/booking";
 import { TouristHeader, BackLink } from "@/components/tourist/TouristChrome";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
@@ -55,20 +56,18 @@ export default function ExperienceDetail() {
   const { id } = useParams();
   const { data: exp, loading } = usePublishedExperience(id);
   const [searchParams] = useSearchParams();
-  const preDate = searchParams.get("date") || undefined;
-  const prePeopleRaw = searchParams.get("people");
-  const prePeople = prePeopleRaw ? parseInt(prePeopleRaw, 10) : undefined;
-  const [sheet, setSheet] = useState<{ open: boolean; date?: string; people?: number }>({
+  const { date: preDate, people: prePeople, time: preTime, children: preChildren, open: preOpen } = readBookingPrefill(searchParams);
+  const [sheet, setSheet] = useState<{ open: boolean; date?: string; time?: string; people?: number; children?: number }>({
     open: false,
   });
 
   // Concierge deep-link: open the booking sheet pre-filled once the experience loads.
   useEffect(() => {
-    if (exp && (preDate || prePeople)) {
-      setSheet({ open: true, date: preDate, people: prePeople });
+    if (exp && preOpen) {
+      setSheet({ open: true, date: preDate, time: preTime, people: prePeople, children: preChildren });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [exp?.id]);
+  }, [exp?.id, preOpen, preDate, preTime, prePeople, preChildren]);
 
   if (loading)
     return (
@@ -256,7 +255,9 @@ export default function ExperienceDetail() {
           open
           onClose={() => setSheet({ open: false })}
           initialDate={sheet.date}
+          initialTime={sheet.time}
           initialPeople={sheet.people}
+          initialChildren={sheet.children}
         />
       )}
     </div>

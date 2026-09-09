@@ -4,6 +4,8 @@ import { priceOf } from "./catalog.js";
 import type { Score, Dimension } from "./scoring.js";
 import { identity } from "./scoring.js";
 import { interestLabels, interestMatch } from "./vocabulary.js";
+import { bookingLink, conversationalDate, conversationalTime } from "../../src/concierge/booking.js";
+import { partySize } from "./catalog.js";
 
 const REASONS: Record<Dimension, string> = {
   interests: "se relaciona con los intereses que mencionaste", feelings: "su ficha coincide con el ambiente que buscas",
@@ -57,8 +59,13 @@ export function detailsVoice(e: CatalogExperience, topic: "details" | "includes"
   else text = `${e.title}\n${e.tags.length ? `Tipo de experiencia: ${e.tags.join(", ")}.\n` : ""}${[e.city, e.department, e.country].filter(Boolean).join(", ")}\nGrupo registrado: ${e.min_capacity} a ${e.max_capacity} personas. ${price.amount == null ? "Precio por confirmar." : `Precio base actualizado: ${price.from ? "desde " : ""}${price.amount} ${price.currency} por persona.`} Podemos consultar qué incluye o verificar una fecha.`;
   return { ...response(text), recommendations: [card(e)] };
 }
-export function availabilityVoice(e: CatalogExperience, availability: Availability): ConciergeResponse {
+export function availabilityVoice(e: CatalogExperience, availability: Availability, profile: TravelerProfile = {}): ConciergeResponse {
   if (availability.status === "unknown") return response(`No pude verificar los cupos de ${e.title}. No puedo confirmar disponibilidad; puedes revisarla en la ficha o con el equipo.`, true);
-  if (availability.status === "unavailable") return response(`No encontré cupos que cumplan la solicitud para ${e.title} el ${availability.date}. ¿Quieres probar otra fecha?`);
-  return { ...response(`Al consultar ahora, ${e.title} tiene cupos para el grupo el ${availability.date} a las ${availability.times.join(", ")}. La reserva debe confirmarse en la pantalla de compra.`), recommendations: [card(e)] };
+  const date = availability.date ? conversationalDate(availability.date) : "la fecha consultada";
+  if (availability.status === "unavailable") return response(`No encontré cupos que cumplan la solicitud para ${e.title} el ${date}. ¿Quieres probar otra fecha?`);
+  const times = new Intl.ListFormat("es", { type: "disjunction" }).format(availability.times.map(conversationalTime));
+  const size = partySize(profile);
+  const bookingPath = availability.date && availability.times.length && size
+    ? bookingLink(e.id, { date: availability.date, time: availability.times.length === 1 ? availability.times[0] : undefined, people: size, children: profile.children }) : undefined;
+  return { ...response(`Al consultar ahora, ${e.title} tiene cupos para ${size ? `${size} persona${size === 1 ? "" : "s"}` : "el grupo"} el ${date} a las ${times}. Puedes continuar con estos datos o cambiarlos antes de completar la reserva.`), recommendations: [card(e)], ...(bookingPath ? { bookingPath } : {}) };
 }

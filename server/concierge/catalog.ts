@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ProfileSchema, type TravelerProfile } from "../../src/concierge/contracts.js";
 import { MetadataSchema } from "./schemas.js";
 import { SupabaseToolsTransport, ToolError } from "./transport.js";
+import { bookingLink } from "../../src/concierge/booking.js";
 
 const timeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/);
 const moneySchema = z.union([z.number().nonnegative(), z.string().regex(/^\d+(?:\.\d+)?$/).transform(Number).pipe(z.number().nonnegative())]).nullable();
@@ -29,7 +30,7 @@ export interface CatalogTools {
   getExperiencePrice(id: string): Promise<ReturnType<typeof priceOf> | null>;
   getExperiencePolicies(id: string): Promise<string | null>;
   checkAvailability(id: string, date?: string, partySize?: number, time?: TravelerProfile["timePreference"]): Promise<Availability>;
-  createBookingIntent(input: { experienceId: string; date?: string; partySize?: number; timePreference?: TravelerProfile["timePreference"] }): Promise<string | null>;
+  createBookingIntent(input: { experienceId: string; date?: string; partySize?: number; children?: number; timePreference?: TravelerProfile["timePreference"] }): Promise<string | null>;
 }
 export function isRecommendable(e: CatalogExperience) {
   return e.is_active && e.publication_status === "published" && e.min_capacity <= e.max_capacity &&
@@ -97,16 +98,15 @@ export class SupabaseCatalog implements CatalogTools {
       return { status: times.length ? "available" : "unavailable", date, times, checkedAt: new Date().toISOString() };
     } catch { return { status: "unknown", date, times: [] }; }
   }
-  async createBookingIntent(input: { experienceId: string; date?: string; partySize?: number; timePreference?: TravelerProfile["timePreference"] }) {
+  async createBookingIntent(input: { experienceId: string; date?: string; partySize?: number; children?: number; timePreference?: TravelerProfile["timePreference"] }) {
     this.log("createBookingIntent");
     const e = await this.getExperienceDetails(input.experienceId);
     if (!e) return null;
     if (input.partySize != null && (!Number.isInteger(input.partySize) || input.partySize < e.min_capacity || input.partySize > e.max_capacity)) return null;
-    if (input.date && (await this.checkAvailability(e.id, input.date, input.partySize, input.timePreference)).status !== "available") return null;
-    const q = new URLSearchParams();
-    if (input.date) q.set("date", input.date);
-    if (input.partySize) q.set("people", String(input.partySize));
+    const availability = input.date ? await this.checkAvailability(e.id, input.date, input.partySize, input.timePreference) : undefined;
+    if (availability && availability.status !== "available") return null;
     // Navigation intent only: existing checkout performs final validation/payment.
-    return `/e/${e.id}${q.size ? `?${q}` : ""}`;
+    return bookingLink(e.id, { date: input.date, people: input.partySize, children: input.children,
+      time: availability?.times.length === 1 ? availability.times[0] : undefined });
   }
 }

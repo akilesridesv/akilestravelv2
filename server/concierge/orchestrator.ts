@@ -101,10 +101,10 @@ export async function runConciergeTurn(input: ConciergeState, message: string, t
     if (state.intent === "availability") {
       const av = await measure("availabilityMs", () => tools.checkAvailability(e.id, p.date, partySize(p), p.timePreference));
       trace.push({ node: "CHECK_AVAILABILITY", data: { status: av.status } });
-      return finish(() => availabilityVoice(e, av));
+      return finish(() => availabilityVoice(e, av, p));
     }
     if (hardExclusions(e, p).length) return finish(() => response("No puedo avanzar con esa experiencia porque no pude verificar que cumpla tus requisitos. Revisa los detalles con el equipo.", true));
-    const path = await measure("bookingIntentMs", () => tools.createBookingIntent({ experienceId: e.id, date: p.date, partySize: partySize(p), timePreference: p.timePreference }));
+    const path = await measure("bookingIntentMs", () => tools.createBookingIntent({ experienceId: e.id, date: p.date, partySize: partySize(p), children: p.children, timePreference: p.timePreference }));
     return finish(() => path ? { ...response(`Puedes continuar con ${e.title} en la pantalla de reserva. Todavía no se ha creado ni cobrado una reserva.`), recommendations: [card(e)], bookingPath: path } : response("No pude preparar la reserva con esos datos. Revisa otra fecha o consulta al equipo.", true));
   }
 

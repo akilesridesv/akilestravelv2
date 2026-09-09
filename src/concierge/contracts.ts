@@ -40,7 +40,7 @@ export const StateSchema = z.object({
   pendingRelaxation: z.enum(["budgetMax", "date", "locationPreferences", "interests", "desiredFeelings"]).optional(),
 }).strict();
 export type ConciergeState = z.infer<typeof StateSchema>;
-const ExperiencePathSchema = z.string().regex(/^\/e\/[a-f0-9-]{36}(?:\?(?:date=\d{4}-\d{2}-\d{2}|people=\d+)(?:&(?:date=\d{4}-\d{2}-\d{2}|people=\d+))*)?$/i);
+const ExperiencePathSchema = z.string().regex(/^\/e\/[a-f0-9-]{36}(?:\?(?:book=1|date=\d{4}-\d{2}-\d{2}|time=(?:[01]\d|2[0-3])(?::|%3A)[0-5]\d|people=\d+|children=\d+)(?:&(?:book=1|date=\d{4}-\d{2}-\d{2}|time=(?:[01]\d|2[0-3])(?::|%3A)[0-5]\d|people=\d+|children=\d+))*)?$/i);
 export const RecommendationSchema = z.object({
   id: z.string().uuid(), title: z.string(), reason: z.string(),
   price: z.number().nonnegative().nullable(), currency: z.string(), priceFrom: z.boolean(),
