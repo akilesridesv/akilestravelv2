@@ -9,6 +9,7 @@ import { RANK_PROMPT } from "./prompts.js";
 import { contains, normalize } from "./vocabulary.js";
 import { availabilityVoice, card, detailsVoice, recommendationsVoice, response } from "./voice.js";
 import { noMatchVoice, smallTalk } from "./conversation.js";
+import { currentBookingContext, readBookingPrefill } from "../../src/concierge/booking.js";
 
 export type Trace = { node: string; data?: Record<string, unknown> }[];
 export function verifyIds(ids: string[], candidateIds: string[], records: CatalogExperience[]): CatalogExperience[] {
@@ -41,6 +42,7 @@ export async function runConciergeTurn(input: ConciergeState, message: string, t
   const finish = (voice: () => ConciergeResponse) => {
     const voiceStarted = performance.now();
     const result = voice();
+    result.bookingContext = currentBookingContext(state.travelerProfile, state.confirmedBooking);
     timings.voiceMs = performance.now() - voiceStarted;
     trace.push({ node: "END_TURN", data: { missingInformation: state.missingInformation, finalRecommendationIds: result.recommendations.map((r) => r.id), handoff: result.handoff } });
     return { state: StateSchema.parse(state), response: result, trace, timings };
@@ -100,11 +102,20 @@ export async function runConciergeTurn(input: ConciergeState, message: string, t
     state.stage = state.intent === "booking" ? "booking" : "availability";
     if (state.intent === "availability") {
       const av = await measure("availabilityMs", () => tools.checkAvailability(e.id, p.date, partySize(p), p.timePreference));
+      state.confirmedBooking = av.status === "available" ? {
+        experienceId: e.id, date: av.date, people: partySize(p), children: p.children,
+        time: av.times.length === 1 ? av.times[0].slice(0, 5) : undefined, timePreference: p.timePreference,
+      } : undefined;
       trace.push({ node: "CHECK_AVAILABILITY", data: { status: av.status } });
       return finish(() => availabilityVoice(e, av, p));
     }
     if (hardExclusions(e, p).length) return finish(() => response("No puedo avanzar con esa experiencia porque no pude verificar que cumpla tus requisitos. Revisa los detalles con el equipo.", true));
     const path = await measure("bookingIntentMs", () => tools.createBookingIntent({ experienceId: e.id, date: p.date, partySize: partySize(p), children: p.children, timePreference: p.timePreference }));
+    if (path) {
+      const prefill = readBookingPrefill(new URLSearchParams(path.split("?")[1]));
+      state.confirmedBooking = { experienceId: e.id, date: prefill.date, time: prefill.time, people: prefill.people,
+        children: prefill.children, timePreference: p.timePreference };
+    }
     return finish(() => path ? { ...response(`Puedes continuar con ${e.title} en la pantalla de reserva. Todavía no se ha creado ni cobrado una reserva.`), recommendations: [card(e)], bookingPath: path } : response("No pude preparar la reserva con esos datos. Revisa otra fecha o consulta al equipo.", true));
   }
 

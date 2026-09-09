@@ -4,6 +4,7 @@ import { Loader2, Send, Sparkles } from "lucide-react";
 import { useApp } from "@/state/store";
 import { conciergeRequest, conciergeToken, resetConcierge } from "@/concierge/client";
 import type { ConciergeMessage } from "@/concierge/contracts";
+import { reservationPath } from "@/concierge/booking";
 import { ExperienceImage } from "@/components/provider/ExperienceImage";
 
 export function AkilesConciergeChat({ initial }: { initial?: { id: string; text: string } }) {
@@ -50,6 +51,8 @@ function Conversation({ scope, initial }: { scope: string; initial?: { id: strin
     if (initial && ready && !busy && sentInitial.current !== initial.id) { sentInitial.current = initial.id; void send(initial.text); }
   }, [initial, ready, busy, send]);
   useEffect(() => { end.current?.scrollIntoView({ block: "nearest" }); }, [messages, busy]);
+  // Apply the latest preferences to every visible card, including older messages.
+  const bookingContext = [...messages].reverse().find((m) => m.metadata?.bookingContext)?.metadata?.bookingContext;
   return <div className="flex h-[64vh] max-h-[720px] flex-col rounded-2xl border border-border bg-card">
     <div className="flex items-center justify-between border-b border-border px-4 py-3">
       <span className="flex items-center gap-2 font-medium"><Sparkles className="h-4 w-4" /> Akiles Concierge</span>
@@ -64,13 +67,14 @@ function Conversation({ scope, initial }: { scope: string; initial?: { id: strin
             <ExperienceImage imageRef={e.image} alt={e.title} className="aspect-[4/3] w-full" />
             <div className="space-y-2 p-3"><p className="text-sm font-medium">{e.title}</p><p className="text-xs text-muted-foreground">{e.reason}</p>
               <p className="text-xs">{e.price == null ? "Precio por confirmar" : `${e.priceFrom ? "Desde " : ""}${e.price} ${e.currency} · precio base por persona`}</p>
+              <Link className="block rounded-full bg-primary px-3 py-2 text-center text-sm font-semibold" to={reservationPath(e.id, bookingContext, m.metadata?.bookingPath)}>Reservar experiencia</Link>
               <Link className="block text-sm font-medium underline" to={e.path}>Ver experiencia</Link>
               <button disabled={busy} className="text-xs underline" onClick={() => void send(`¿Está disponible ${e.title}?`)}>Ver disponibilidad</button>
             </div>
           </div>)}
         </div>}
         {m.metadata?.recommendations.length === 2 && <button disabled={busy} className="mt-2 text-sm underline" onClick={() => void send(`Compara ${m.metadata!.recommendations.map((e) => e.title).join(" y ")}`)}>Comparar</button>}
-        {m.metadata?.bookingPath && <Link className="mt-2 inline-block rounded-full bg-primary px-4 py-2 text-sm font-semibold" to={m.metadata.bookingPath}>Reservar experiencia</Link>}
+        {m.metadata?.bookingPath && !m.metadata.recommendations.length && <Link className="mt-2 inline-block rounded-full bg-primary px-4 py-2 text-sm font-semibold" to={m.metadata.bookingPath}>Reservar experiencia</Link>}
         {m.metadata?.handoff && <Link to="/cuenta" className="mt-2 block text-sm underline">Abrir mi cuenta para solicitar ayuda a Akiles</Link>}
       </div>)}
       {(busy || !ready && !error) && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {busy ? "Revisando tus preferencias y el catálogo…" : "Recuperando la conversación…"}</p>}

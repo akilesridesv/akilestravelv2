@@ -3,6 +3,27 @@ import { z } from "zod";
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((s) => !Number.isNaN(Date.parse(s)) && new Date(s).toISOString().slice(0, 10) === s);
 const clockTime = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
 const positive = z.coerce.number().int().min(1).max(500);
+export const BookingContextSchema = z.object({
+  date: isoDate.optional(), people: z.number().int().min(1).max(500).optional(), children: z.number().int().min(0).max(499).optional(),
+  experienceId: z.string().uuid().optional(), time: clockTime.optional(),
+});
+export const ConfirmedBookingSchema = BookingContextSchema.extend({ timePreference: z.enum(["morning", "afternoon", "evening"]).optional() });
+export type BookingContext = z.infer<typeof BookingContextSchema>;
+type BookingProfile = { date?: string; adults?: number; children?: number; timePreference?: string };
+export function currentBookingContext(profile: BookingProfile, confirmed?: z.infer<typeof ConfirmedBookingSchema>): BookingContext {
+  const count = profile.adults == null ? undefined : profile.adults + (profile.children ?? 0);
+  const people = count != null && count <= 500 ? count : undefined;
+  const matches = confirmed && confirmed.date === profile.date && confirmed.people === people &&
+    (confirmed.children ?? 0) === (profile.children ?? 0) && confirmed.timePreference === profile.timePreference;
+  return { date: profile.date, people, children: people != null && (profile.children ?? 0) < people ? profile.children : undefined,
+    ...(matches ? { experienceId: confirmed.experienceId, time: confirmed.time } : {}) };
+}
+export function reservationPath(id: string, context?: BookingContext, legacyPath?: string): string {
+  if (context) return bookingLink(id, { ...context, time: context.experienceId === id ? context.time : undefined });
+  // Older conversations may have a response-wide booking link; never reuse it for another card.
+  if (legacyPath?.startsWith(`/e/${id}?`)) return legacyPath;
+  return bookingLink(id, {});
+}
 export type BookingPrefill = { date?: string; time?: string; people?: number; children?: number; open: boolean };
 
 export function readBookingPrefill(params: URLSearchParams): BookingPrefill {

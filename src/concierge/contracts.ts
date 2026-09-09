@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BookingContextSchema, ConfirmedBookingSchema } from "./booking.js";
 
 export const IntentSchema = z.enum(["discover", "specific_experience", "compare", "availability", "booking", "general_question"]);
 export const ProfileSchema = z.object({
@@ -33,6 +34,7 @@ export const StateSchema = z.object({
   rejectedExperienceIds: z.array(z.string().uuid()).max(100).default([]),
   missingInformation: z.array(z.string()).max(10).default([]),
   recommendationConfidence: z.number().min(0).max(1).optional(),
+  confirmedBooking: ConfirmedBookingSchema.optional(),
   lastQuestion: z.string().max(500).optional(),
   turnCount: z.number().int().min(0).max(1000).default(0),
   clarificationCount: z.number().int().min(0).max(3).default(0),
@@ -49,6 +51,7 @@ export const RecommendationSchema = z.object({
 export const ResponseSchema = z.object({
   text: z.string(), recommendations: z.array(RecommendationSchema).max(3),
   bookingPath: ExperiencePathSchema.optional(), handoff: z.boolean().default(false),
+  bookingContext: BookingContextSchema.optional(),
 });
 export type ConciergeResponse = z.infer<typeof ResponseSchema>;
 export type ConciergeMessage = { role: "user" | "assistant"; content: string; metadata?: ConciergeResponse };

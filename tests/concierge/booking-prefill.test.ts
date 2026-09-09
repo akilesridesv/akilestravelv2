@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bookingLink, conversationalDate, conversationalTime, readBookingPrefill } from "../../src/concierge/booking";
+import { bookingLink, conversationalDate, conversationalTime, readBookingPrefill, reservationPath, currentBookingContext } from "../../src/concierge/booking";
 import { ResponseSchema, newState } from "../../src/concierge/contracts";
 import { availabilityVoice } from "../../server/concierge/voice";
 import { runConciergeTurn } from "../../server/concierge/orchestrator";
@@ -57,4 +57,45 @@ test("availability route gives a booking CTA without creating a reservation", as
   assert.equal(params.get("date"), "2026-09-12"); assert.equal(params.get("people"), "4"); assert.equal(params.get("time"), "14:00");
   assert.ok(calls.includes(`availability:${e.id}`));
   assert.ok(!calls.some((c) => c.startsWith("bookingIntent:")));
+});
+
+test("every card has a reservation destination even before dates or party size are known", async () => {
+  const a = experience(); const b = experience(); const { tools } = fixtureTools([a, b]);
+  const out = await runConciergeTurn(newState(crypto.randomUUID()), "Tour de café", tools, noModel);
+  assert.equal(out.response.recommendations.length, 2);
+  for (const card of out.response.recommendations) {
+    const url = new URL(reservationPath(card.id, out.response.bookingContext), "https://example.test");
+    assert.equal(url.pathname, `/e/${card.id}`);
+    assert.equal(url.searchParams.get("book"), "1");
+    assert.equal(url.searchParams.has("date"), false);
+    assert.equal(readBookingPrefill(url.searchParams).open, true);
+  }
+});
+
+test("verified time survives follow-up Q&A and updates older cards only for the same experience", async () => {
+  const a = experience(); const b = experience(); const { tools } = fixtureTools([a, b]);
+  const state = newState(crypto.randomUUID()); state.recommendedExperienceIds = [a.id]; state.travelerProfile = { adults: 4 };
+  const available = await runConciergeTurn(state, "¿Está disponible el 2026-09-12?", tools, noModel);
+  const details = await runConciergeTurn(available.state, "¿Qué incluye?", tools, noModel);
+  const params = (id: string) => new URL(reservationPath(id, details.response.bookingContext), "https://example.test").searchParams;
+  assert.equal(params(a.id).get("time"), "14:00"); assert.equal(params(a.id).get("people"), "4");
+  assert.equal(params(b.id).get("time"), null); assert.equal(params(b.id).get("date"), "2026-09-12");
+});
+
+test("changing date, people or time preference drops previously verified time", () => {
+  const id = crypto.randomUUID();
+  const confirmed = { experienceId: id, date: "2026-09-12", people: 4, time: "16:00", timePreference: "afternoon" as const };
+  for (const patch of [{ date: "2026-09-13" }, { adults: 2 }, { timePreference: "morning" }, { children: 1 }]) {
+    const context = currentBookingContext({ date: "2026-09-12", adults: 4, timePreference: "afternoon", ...patch }, confirmed);
+    assert.equal(context.time, undefined);
+    assert.equal(context.experienceId, undefined);
+  }
+});
+
+test("older conversation fallback keeps booking links scoped to each card", () => {
+  const a = crypto.randomUUID(); const b = crypto.randomUUID();
+  const oldPath = bookingLink(a, { date: "2026-09-12", people: 2, time: "16:00" });
+  assert.equal(reservationPath(a, undefined, oldPath), oldPath);
+  assert.equal(reservationPath(b, undefined, oldPath), `/e/${b}?book=1`);
+  assert.equal(reservationPath(a, {}, oldPath), `/e/${a}?book=1`);
 });
